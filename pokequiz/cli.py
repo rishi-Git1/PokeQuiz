@@ -3,11 +3,24 @@ from __future__ import annotations
 import random
 
 from pokequiz.data import load_dex
-from pokequiz.games.pokedoku import custom_constraints, random_constraints, validate_grid_answers
-from pokequiz.games.squirdle import compare_guess
+from pokequiz.games.pokedoku import (
+    custom_constraints,
+    format_pokedoku_grid,
+    random_constraints,
+    validate_grid_answers,
+)
+from pokequiz.games.squirdle import compare_guess, format_squirdle_feedback
 from pokequiz.games.stat_quiz import is_correct_guess, prompt_for_mon
-from pokequiz.games.statle import STAT_LABELS, remaining_stats, resolve_turn, total_score
-from pokequiz.models import GameSettings
+from pokequiz.sprites import print_statle_sprite
+from pokequiz.games.statle import (
+    STAT_LABELS,
+    format_optimal_statle_summary,
+    optimal_statle_assignment,
+    remaining_stats,
+    resolve_turn,
+    total_score,
+)
+from pokequiz.models import GameSettings, Pokemon
 
 LAST_STAT_QUIZ: str | None = None
 
@@ -39,17 +52,58 @@ def run_pokedoku() -> None:
         cols = [input(f"Col {i+1}: ") for i in range(3)]
         row_constraints, col_constraints = custom_constraints(rows, cols)
     else:
-        row_constraints, col_constraints = random_constraints(dex, settings)
+        try:
+            row_constraints, col_constraints = random_constraints(dex, settings)
+        except ValueError as err:
+            print(err)
+            return
 
-    print("Rows:", [r.label for r in row_constraints])
-    print("Cols:", [c.label for c in col_constraints])
+    answers: list[list[str]] = [["" for _ in range(3)] for _ in range(3)]
 
-    answers: list[list[str]] = []
-    for r_idx in range(3):
-        row: list[str] = []
-        for c_idx in range(3):
-            row.append(input(f"Cell ({r_idx+1},{c_idx+1}): "))
-        answers.append(row)
+    print(
+        "\nFill the 3x3 grid. Commands (row and column are 1-3):\n"
+        "  <row> <col> <name>   set or replace a cell (e.g. 2 3 pikachu or 1 1 mr mime)\n"
+        "  clear <row> <col>    empty a cell\n"
+        "  done                 finish and score\n"
+    )
+
+    while True:
+        print()
+        print(format_pokedoku_grid(row_constraints, col_constraints, answers))
+        raw = input("Pokedoku> ").strip()
+        if not raw:
+            continue
+        parts = raw.split()
+        low0 = parts[0].casefold()
+        if low0 == "done":
+            break
+        if low0 in ("clear", "c", "x") and len(parts) >= 3:
+            try:
+                r, c = int(parts[1]), int(parts[2])
+            except ValueError:
+                print("Use: clear <row> <col> with numbers 1-3.")
+                continue
+            if not (1 <= r <= 3 and 1 <= c <= 3):
+                print("Row and column must be between 1 and 3.")
+                continue
+            answers[r - 1][c - 1] = ""
+            continue
+        if len(parts) >= 3:
+            try:
+                r, c = int(parts[0]), int(parts[1])
+            except ValueError:
+                print("Use: <row> <col> <pokemon name>, or clear/done.")
+                continue
+            if not (1 <= r <= 3 and 1 <= c <= 3):
+                print("Row and column must be between 1 and 3.")
+                continue
+            name = " ".join(parts[2:]).strip()
+            if not name:
+                print("Enter a Pokemon name after the row and column.")
+                continue
+            answers[r - 1][c - 1] = name
+            continue
+        print("Unrecognized input. Try: 2 1 charizard  |  clear 2 1  |  done")
 
     score, marks, warning = validate_grid_answers(dex, row_constraints, col_constraints, answers, settings)
     print(f"Score: {score}/9")
@@ -78,7 +132,7 @@ def run_squirdle() -> None:
             print("Correct!")
             return
         feedback = compare_guess(target, guess)
-        print(feedback)
+        print(format_squirdle_feedback(feedback))
     print(f"Out of guesses. Target was {target.name}.")
 
 
@@ -120,6 +174,7 @@ def run_statle() -> None:
 
     picked_stats: list[str] = []
     results = []
+    round_mons: list[Pokemon] = []
     print("Statle mode: each round a random Pokémon is shown; pick one unused stat to score.")
     while True:
         available = remaining_stats(picked_stats)
@@ -127,8 +182,10 @@ def run_statle() -> None:
             break
 
         mon = random.choice(pool)
+        round_mons.append(mon)
         round_no = len(picked_stats) + 1
         print(f"\nRound {round_no}/6: {mon.name}")
+        print_statle_sprite(mon)
         print("Choose one remaining stat:")
         for idx, stat in enumerate(available, start=1):
             print(f"{idx}) {STAT_LABELS[stat]}")
@@ -148,7 +205,10 @@ def run_statle() -> None:
         print(f"{STAT_LABELS[result.stat]} = {result.value}")
         print(f"Running total: {total_score(results)}")
 
-    print(f"\nFinal total: {total_score(results)}")
+    final = total_score(results)
+    print(f"\nFinal total: {final}")
+    optimal_total, plan = optimal_statle_assignment(round_mons)
+    print(format_optimal_statle_summary(round_mons, plan, optimal_total, your_total=final))
 
 
 def main() -> None:

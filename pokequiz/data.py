@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
 
 from pokequiz.models import GameSettings, Pokemon
 
 CACHE_PATH = Path(".cache/pokemon_minidex.json")
+
+# PokeAPI rejects the default Python urllib User-Agent with HTTP 403.
+POKEAPI_UA = "PokeQuiz/0.1 (+https://github.com/PokeQuiz; contact: local dev)"
+MIN_DEX_CACHE_ENTRIES = 500
 
 GEN_LOOKUP = {
     "generation-i": 1,
@@ -232,47 +237,72 @@ def _fetch_with_pokebase() -> list[Pokemon]:
     return mons
 
 
-def fetch_one_by_name(name: str) -> Pokemon | None:
-    try:
-        import pokebase as pb  # type: ignore
+def _pokemon_from_pokeapi_dicts(p: dict, species: dict, *, force_name: str | None = None) -> Pokemon:
+    pseudo_p = type("P", (), {})()
+    pseudo_p.name = p["name"]
+    pseudo_p.types = [
+        type("PT", (), {"type": type("T", (), {"name": t["type"]["name"]})()})() for t in p["types"]
+    ]
+    pseudo_p.stats = [
+        type("PS", (), {"stat": type("S", (), {"name": st["stat"]["name"]})(), "base_stat": st["base_stat"]})()
+        for st in p["stats"]
+    ]
+    pseudo_p.height = p["height"]
+    pseudo_p.weight = p["weight"]
 
-        normalized = normalize_name(name)
-        p = pb.pokemon(normalized)
-        species = pb.pokemon_species(p.species.name)
-        return _to_pokemon(p, species, force_name=normalized)
+    pseudo_species = type("SP", (), {})()
+    pseudo_species.id = species["id"]
+    gen = species.get("generation") or {"name": "generation-i"}
+    pseudo_species.generation = type("G", (), {"name": gen["name"]})()
+
+    return _to_pokemon(pseudo_p, pseudo_species, force_name=force_name)
+
+
+def _fetch_pokemon_by_name_api(normalized: str) -> Pokemon | None:
+    try:
+        p_json = _fetch_json(f"https://pokeapi.co/api/v2/pokemon/{normalized}")
+        species = _fetch_json(p_json["species"]["url"])
+        return _pokemon_from_pokeapi_dicts(p_json, species, force_name=normalized)
     except Exception:
         return None
 
 
+def fetch_one_by_name(name: str) -> Pokemon | None:
+    normalized = normalize_name(name)
+    try:
+        import pokebase as pb  # type: ignore
+
+        p = pb.pokemon(normalized)
+        species = pb.pokemon_species(p.species.name)
+        return _to_pokemon(p, species, force_name=normalized)
+    except Exception:
+        return _fetch_pokemon_by_name_api(normalized)
+
+
 
 def _fetch_json(url: str) -> dict:
-    from urllib.request import urlopen
+    from urllib.request import Request, urlopen
 
-    with urlopen(url, timeout=20) as response:  # noqa: S310
+    req = Request(url, headers={"User-Agent": POKEAPI_UA})  # noqa: S310
+    with urlopen(req, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _fetch_slot_pokeapi(dex_no: int) -> tuple[int, Pokemon]:
+    p = _fetch_json(f"https://pokeapi.co/api/v2/pokemon/{dex_no}")
+    species = _fetch_json(f"https://pokeapi.co/api/v2/pokemon-species/{dex_no}")
+    return dex_no, _pokemon_from_pokeapi_dicts(p, species)
+
+
 def _fetch_with_pokeapi() -> list[Pokemon]:
-    mons: list[Pokemon] = []
-
-    for dex_no in range(1, 1026):
-        p = _fetch_json(f"https://pokeapi.co/api/v2/pokemon/{dex_no}")
-        species = _fetch_json(f"https://pokeapi.co/api/v2/pokemon-species/{dex_no}")
-
-        pseudo_p = type("P", (), {})()
-        pseudo_p.name = p["name"]
-        pseudo_p.types = [type("PT", (), {"type": type("T", (), {"name": t["type"]["name"]})()})() for t in p["types"]]
-        pseudo_p.stats = [type("PS", (), {"stat": type("S", (), {"name": st["stat"]["name"]})(), "base_stat": st["base_stat"]})() for st in p["stats"]]
-        pseudo_p.height = p["height"]
-        pseudo_p.weight = p["weight"]
-
-        pseudo_species = type("SP", (), {})()
-        pseudo_species.id = species["id"]
-        pseudo_species.generation = type("G", (), {"name": species["generation"]["name"]})()
-
-        mons.append(_to_pokemon(pseudo_p, pseudo_species))
-
-    return mons
+    # Parallelize: ~2k requests is impractical serially; PokeAPI tolerates modest concurrency.
+    by_slot: dict[int, Pokemon] = {}
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = [pool.submit(_fetch_slot_pokeapi, n) for n in range(1, 1026)]
+        for fut in as_completed(futures):
+            dex_no, mon = fut.result()
+            by_slot[dex_no] = mon
+    return [by_slot[i] for i in range(1, 1026)]
 
 def _fallback_data() -> list[Pokemon]:
     return [
@@ -296,9 +326,10 @@ def load_dex(force_refresh: bool = False) -> Dex:
         raw = json.loads(CACHE_PATH.read_text())
         mons = [Pokemon(**item) for item in raw]
         # Auto-refresh old tiny caches from earlier builds so quizzes use broad dex data.
-        if len(mons) >= 500:
+        if len(mons) >= MIN_DEX_CACHE_ENTRIES:
             return Dex(mons)
 
+    mons: list[Pokemon] = []
     try:
         mons = _fetch_with_pokebase()
     except Exception:
@@ -307,6 +338,8 @@ def load_dex(force_refresh: bool = False) -> Dex:
         except Exception:
             mons = _fallback_data()
 
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_PATH.write_text(json.dumps([asdict(m) for m in mons], indent=2, default=list))
+    # Do not persist a tiny emergency dex; otherwise every launch re-reads bad data until refresh.
+    if len(mons) >= MIN_DEX_CACHE_ENTRIES:
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_PATH.write_text(json.dumps([asdict(m) for m in mons], indent=2, default=list))
     return Dex(mons)

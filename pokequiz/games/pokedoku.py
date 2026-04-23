@@ -34,8 +34,17 @@ def random_constraints(dex: Dex, settings: GameSettings) -> tuple[list[Constrain
     mons = dex.filtered(settings)
     types = sorted({t for m in mons for t in m.types})
     gens = sorted({m.generation for m in mons})
-    row = [Constraint("type", v) for v in random.sample(types, k=min(3, len(types)))]
-    col = [Constraint("generation", v) for v in random.sample(gens, k=min(3, len(gens)))]
+    if not types or not gens:
+        raise ValueError("No Pokémon match your filters; cannot build a random Pokedoku grid.")
+
+    def pick_three(values: list) -> list:
+        # Grids are always 3×3; with a small dex there may be fewer than three distinct types or gens.
+        if len(values) >= 3:
+            return random.sample(values, k=3)
+        return random.choices(values, k=3)
+
+    row = [Constraint("type", v) for v in pick_three(types)]
+    col = [Constraint("generation", v) for v in pick_three(gens)]
     return row, col
 
 
@@ -49,6 +58,48 @@ def custom_constraints(rows: list[str], cols: list[str]) -> tuple[list[Constrain
         return Constraint(kind, value.casefold())
 
     return [parse(r) for r in rows], [parse(c) for c in cols]
+
+
+def format_pokedoku_grid(
+    row_constraints: list[Constraint],
+    col_constraints: list[Constraint],
+    answers: list[list[str]],
+    *,
+    col_width: int = 16,
+    label_col_width: int = 18,
+) -> str:
+    """ASCII table: column categories across the top, row categories down the left, 3×3 answers."""
+    lines: list[str] = []
+
+    def trunc(s: str, w: int) -> str:
+        s = s.strip()
+        if len(s) <= w:
+            return s
+        return s[: w - 2] + ".."
+
+    def cell_display(raw: str) -> str:
+        raw = raw.strip()
+        return trunc(raw, col_width) if raw else "-"
+
+    col_heads = [trunc(c.label, col_width) for c in col_constraints]
+    corner = "".ljust(label_col_width)
+    top = corner + "".join(f"| {h.center(col_width)} " for h in col_heads) + "|"
+    lines.append(top)
+
+    data_lines: list[str] = []
+    for r_idx, r in enumerate(row_constraints):
+        row_label = trunc(r.label, label_col_width).ljust(label_col_width)
+        parts = [row_label]
+        for c_idx in range(3):
+            parts.append(f"| {cell_display(answers[r_idx][c_idx]).center(col_width)} ")
+        parts.append("|")
+        data_lines.append("".join(parts))
+
+    width = max(len(top), *(len(dl) for dl in data_lines))
+    lines.append("-" * width)
+    lines.extend(data_lines)
+
+    return "\n".join(lines)
 
 
 def validate_grid_answers(
