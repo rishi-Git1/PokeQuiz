@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Callable
 
 from pokequiz.data import _fetch_json, normalize_name
+from pokequiz.games.ev_forensic import STAT_LABELS
 from pokequiz.models import Pokemon
 
 
@@ -57,34 +58,40 @@ def _speed_band(mon: Pokemon) -> str:
     return "100+"
 
 
-def _weight_band(mon: Pokemon) -> str:
-    v = mon.weight_hg
-    if v < 1000:
-        return "light"
-    if v < 3000:
-        return "midweight"
-    return "heavy"
+def _ev_drop_signature(mon: Pokemon) -> str:
+    try:
+        payload = _pokemon_payload(mon.name)
+    except Exception:
+        return "unknown-ev-drop"
+    parts: list[tuple[str, int]] = []
+    for s in payload.get("stats", []):
+        stat_name = s.get("stat", {}).get("name")
+        effort = int(s.get("effort", 0) or 0)
+        if stat_name and effort > 0:
+            parts.append((str(stat_name), effort))
+    if not parts:
+        return "no-ev-yield"
+    parts.sort(key=lambda x: x[0])
+    return "|".join(f"{sn}:{ev}" for sn, ev in parts)
 
 
-def _height_band(mon: Pokemon) -> str:
-    v = mon.height_dm
-    if v < 10:
-        return "short"
-    if v < 20:
-        return "medium"
-    return "tall"
-
-
-def _starts_with(mon: Pokemon) -> str:
-    return mon.name[0] if mon.name else "?"
-
-
-def _ends_with(mon: Pokemon) -> str:
-    return mon.name[-1] if mon.name else "?"
-
-
-def _name_length(mon: Pokemon) -> str:
-    return str(len(mon.name))
+def _explain_ev_drop(key: str) -> str:
+    if key == "unknown-ev-drop":
+        return "same EV drop pattern (unknown)"
+    if key == "no-ev-yield":
+        return "same EV yield (no EVs from this species)"
+    pieces: list[str] = []
+    for chunk in key.split("|"):
+        if ":" not in chunk:
+            continue
+        sn, ev_s = chunk.split(":", 1)
+        try:
+            ev = int(ev_s)
+        except ValueError:
+            continue
+        label = STAT_LABELS.get(sn, sn.replace("-", " ").title())
+        pieces.append(f"+{ev} {label}")
+    return "same EV drop pattern (" + ", ".join(pieces) + ")"
 
 
 @lru_cache(maxsize=4096)
@@ -147,11 +154,13 @@ TRAIT_OPTIONS: tuple[TraitOption, ...] = (
     TraitOption("typing_arity", "same mono/dual typing", _typing_arity, lambda v: f"same typing arity ({v})"),
     TraitOption("bst_band", "same BST band", _bst_band, lambda v: f"same BST band ({v})"),
     TraitOption("speed_band", "same speed band", _speed_band, lambda v: f"same speed band ({v})"),
-    TraitOption("weight_band", "same weight class", _weight_band, lambda v: f"same weight class ({v})"),
-    TraitOption("height_band", "same height class", _height_band, lambda v: f"same height class ({v})"),
-    TraitOption("starts_with", "same first letter", _starts_with, lambda v: f"same first letter ({v})"),
-    TraitOption("ends_with", "same last letter", _ends_with, lambda v: f"same last letter ({v})"),
-    TraitOption("name_length", "same name length", _name_length, lambda v: f"same name length ({v})"),
+    TraitOption(
+        "ev_drop",
+        "same EV drop pattern",
+        _ev_drop_signature,
+        _explain_ev_drop,
+        expensive=True,
+    ),
     TraitOption(
         "primary_ability",
         "same primary ability",
