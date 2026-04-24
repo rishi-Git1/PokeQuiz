@@ -1,5 +1,5 @@
 from pokequiz.data import Dex
-from pokequiz.games.pokedoku import Constraint, format_pokedoku_grid, validate_grid_answers
+from pokequiz.games.pokedoku import Constraint, custom_constraints, format_pokedoku_grid, validate_grid_answers
 from pokequiz.models import GameSettings, Pokemon
 
 
@@ -41,3 +41,21 @@ def test_format_pokedoku_grid_includes_labels_and_cells():
     assert "type:fire" in text
     assert "generation:1" in text
     assert "a" in text and "b" in text and "-" in text
+
+
+def test_custom_constraints_new_kinds_parse_and_match():
+    rows, cols = custom_constraints(
+        ["secondary_type-none", "first-letter:c", "bst-over:500"],
+        ["last-letter:r", "height-under:10", "weight-over:500"],
+    )
+    assert rows[0].kind == "secondary_type-none"
+    assert rows[0].value is None
+    assert rows[1].kind == "first-letter" and rows[1].value == "c"
+    assert cols[0].kind == "last-letter" and cols[0].value == "r"
+
+    charizard = Pokemon(6, "charizard", 1, ("fire", "flying"), 78, 84, 78, 109, 85, 100, 17, 905)
+    cinderace = Pokemon(815, "cinderace", 8, ("fire",), 80, 116, 75, 65, 75, 119, 14, 330)
+    assert rows[0].matches(cinderace) is True
+    assert rows[0].matches(charizard) is False
+    assert rows[1].matches(charizard) is True
+    assert rows[2].matches(charizard) is True

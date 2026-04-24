@@ -25,11 +25,44 @@ from pokequiz.models import GameSettings, Pokemon
 LAST_STAT_QUIZ: str | None = None
 
 
+POKEDOKU_CUSTOM_CONSTRAINT_HELP = (
+    "Custom constraint syntax:\n"
+    "  kind:value\n"
+    "Kinds:\n"
+    "  type, generation,\n"
+    "  bst-over, bst-under,\n"
+    "  height-over, height-under,\n"
+    "  weight-over, weight-under,\n"
+    "  first-letter, last-letter,\n"
+    "  secondary_type-none   (no :value)\n"
+    "Examples:\n"
+    "  type:fire\n"
+    "  generation:3\n"
+    "  bst-over:500\n"
+    "  first-letter:c\n"
+    "  secondary_type-none"
+)
+
+POKEDOKU_COMMAND_HELP = (
+    "Pokedoku commands:\n"
+    "  <row> <col> <name>   set/replace a cell (e.g. 2 3 pikachu)\n"
+    "  clear <row> <col>    clear a cell\n"
+    "  done                 score the board\n"
+    "  help / syntax        show command + constraint syntax"
+)
+
+
 def _input_bool(prompt: str, default: bool = True) -> bool:
-    raw = input(f"{prompt} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
-    if not raw:
-        return default
-    return raw in {"y", "yes"}
+    while True:
+        raw = input(f"{prompt} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
+        if not raw:
+            print("Please enter y/yes or n/no.")
+            continue
+        if raw in {"y", "yes"}:
+            return True
+        if raw in {"n", "no"}:
+            return False
+        print("Please enter y/yes or n/no.")
 
 
 def _settings_menu() -> GameSettings:
@@ -47,7 +80,8 @@ def run_pokedoku() -> None:
     settings = _settings_menu()
     custom = _input_bool("Build a custom Pokedoku grid?", False)
     if custom:
-        print("Enter 3 row constraints and 3 column constraints as kind:value (kind in type,generation,mega,regional).")
+        print("Enter 3 row constraints and 3 column constraints.")
+        print(POKEDOKU_CUSTOM_CONSTRAINT_HELP)
         rows = [input(f"Row {i+1}: ") for i in range(3)]
         cols = [input(f"Col {i+1}: ") for i in range(3)]
         row_constraints, col_constraints = custom_constraints(rows, cols)
@@ -60,12 +94,8 @@ def run_pokedoku() -> None:
 
     answers: list[list[str]] = [["" for _ in range(3)] for _ in range(3)]
 
-    print(
-        "\nFill the 3x3 grid. Commands (row and column are 1-3):\n"
-        "  <row> <col> <name>   set or replace a cell (e.g. 2 3 pikachu or 1 1 mr mime)\n"
-        "  clear <row> <col>    empty a cell\n"
-        "  done                 finish and score\n"
-    )
+    print("\nFill the 3x3 grid. Commands (row and column are 1-3):")
+    print(POKEDOKU_COMMAND_HELP)
 
     while True:
         print()
@@ -75,6 +105,11 @@ def run_pokedoku() -> None:
             continue
         parts = raw.split()
         low0 = parts[0].casefold()
+        if low0 in ("help", "syntax"):
+            print(POKEDOKU_COMMAND_HELP)
+            print()
+            print(POKEDOKU_CUSTOM_CONSTRAINT_HELP)
+            continue
         if low0 == "done":
             break
         if low0 in ("clear", "c", "x") and len(parts) >= 3:
@@ -120,14 +155,19 @@ def run_squirdle() -> None:
     target = random.choice(pool)
     print("Guess the Pokémon. You get 8 guesses.")
     for turn in range(1, 9):
-        guess_name = input(f"Guess {turn}: ").strip()
-        guess = dex.by_name(guess_name)
-        if not guess:
-            print("Unknown Pokémon.")
-            continue
-        if not settings.accepts(guess):
-            print("That Pokémon is outside your current generation/variant filters.")
-            continue
+        while True:
+            guess_name = input(f"Guess {turn}: ").strip()
+            if not guess_name:
+                print("Guess cannot be blank.")
+                continue
+            guess = dex.by_name(guess_name)
+            if not guess:
+                print(f'Unknown Pokémon: "{guess_name}"')
+                continue
+            if not settings.accepts(guess):
+                print("That Pokémon is outside your current generation/variant filters.")
+                continue
+            break
         if guess.name == target.name:
             print("Correct!")
             return
@@ -155,7 +195,16 @@ def run_stat_quiz() -> None:
     print("Identify this Pokémon from stats:")
     print(prompt_for_mon(mon))
     for tries in range(1, 4):
-        guess = input(f"Guess {tries}/3: ")
+        while True:
+            guess = input(f"Guess {tries}/3: ").strip()
+            if not guess:
+                print("Guess cannot be blank.")
+                continue
+            guessed_mon = dex.by_name(guess)
+            if not guessed_mon:
+                print(f'Unknown Pokémon: "{guess}"')
+                continue
+            break
         if is_correct_guess(mon, guess):
             print("Correct!")
             return

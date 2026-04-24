@@ -39,6 +39,8 @@ def test_pure_fire_vs_fire_flying_slots():
     fb = compare_guess(charmander, charizard)
     assert fb["type_1"] == "correct"
     assert fb["type_2"] == "incorrect"
+    assert fb["guess_type_1"] == "fire"
+    assert fb["guess_type_2"] == "flying"
 
 
 def test_mono_secondary_category_matches():
@@ -47,6 +49,7 @@ def test_mono_secondary_category_matches():
     fb = compare_guess(a, b)
     assert fb["type_1"] == "correct"
     assert fb["type_2"] == "correct"
+    assert fb["guess_type_2"] == "none"
 
 
 def test_dual_type_both_wrong_order():
@@ -56,6 +59,8 @@ def test_dual_type_both_wrong_order():
     fb = compare_guess(tyranitar, other)
     assert fb["type_1"] == "incorrect"
     assert fb["type_2"] == "incorrect"
+    assert fb["type_2_matches_answer_type_1"] == "yes"
+    assert fb["type_1_matches_answer_type_2"] == "yes"
 
 
 def test_type_slot_sentinel_distinct_from_real_type():

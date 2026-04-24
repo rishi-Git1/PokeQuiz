@@ -10,23 +10,37 @@ from pokequiz.models import GameSettings, Pokemon
 @dataclass(slots=True)
 class Constraint:
     kind: str
-    value: str | int | bool
+    value: str | int | bool | None
 
     def matches(self, mon: Pokemon) -> bool:
         if self.kind == "type":
             return str(self.value) in mon.types
         if self.kind == "generation":
             return int(self.value) == mon.generation
-        if self.kind == "mega":
-            required = bool(self.value)
-            return mon.is_mega == required
-        if self.kind == "regional":
-            required = bool(self.value)
-            return mon.is_regional_variant == required
+        if self.kind == "bst-over":
+            return mon.bst > int(self.value)
+        if self.kind == "bst-under":
+            return mon.bst < int(self.value)
+        if self.kind == "height-over":
+            return mon.height_dm > int(self.value)
+        if self.kind == "height-under":
+            return mon.height_dm < int(self.value)
+        if self.kind == "weight-over":
+            return mon.weight_hg > int(self.value)
+        if self.kind == "weight-under":
+            return mon.weight_hg < int(self.value)
+        if self.kind == "secondary_type-none":
+            return len(mon.types) < 2
+        if self.kind == "first-letter":
+            return mon.name.casefold().startswith(str(self.value))
+        if self.kind == "last-letter":
+            return mon.name.casefold().endswith(str(self.value))
         return False
 
     @property
     def label(self) -> str:
+        if self.value is None:
+            return self.kind
         return f"{self.kind}:{self.value}"
 
 
@@ -50,12 +64,23 @@ def random_constraints(dex: Dex, settings: GameSettings) -> tuple[list[Constrain
 
 def custom_constraints(rows: list[str], cols: list[str]) -> tuple[list[Constraint], list[Constraint]]:
     def parse(raw: str) -> Constraint:
-        kind, value = [r.strip() for r in raw.split(":", maxsplit=1)]
+        text = raw.strip().casefold()
+        if text == "secondary_type-none":
+            return Constraint("secondary_type-none", None)
+        if ":" not in text:
+            raise ValueError(f"Invalid constraint '{raw}'. Use kind:value (or secondary_type-none).")
+        kind, value = [r.strip() for r in text.split(":", maxsplit=1)]
         if kind == "generation":
             return Constraint(kind, int(value))
-        if kind in {"mega", "regional"}:
-            return Constraint(kind, value.casefold() in {"1", "true", "yes", "y"})
-        return Constraint(kind, value.casefold())
+        if kind in {"bst-over", "bst-under", "height-over", "height-under", "weight-over", "weight-under"}:
+            return Constraint(kind, int(value))
+        if kind in {"first-letter", "last-letter"}:
+            if len(value) != 1 or not value.isalpha():
+                raise ValueError(f"Constraint '{kind}' requires a single letter.")
+            return Constraint(kind, value)
+        if kind == "type":
+            return Constraint(kind, value)
+        raise ValueError(f"Unknown constraint kind '{kind}'.")
 
     return [parse(r) for r in rows], [parse(c) for c in cols]
 
