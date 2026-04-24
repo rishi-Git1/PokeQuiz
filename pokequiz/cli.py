@@ -86,9 +86,13 @@ def _settings_menu() -> GameSettings:
     return GameSettings(allow_megas=allow_megas, allow_regionals=allow_regionals, allowed_generations=gens)
 
 
-def run_pokedoku() -> None:
+def _settings_summary(settings: GameSettings) -> str:
+    gens = "all" if settings.allowed_generations is None else ",".join(str(g) for g in sorted(settings.allowed_generations))
+    return f"megas={'on' if settings.allow_megas else 'off'} | regionals={'on' if settings.allow_regionals else 'off'} | gens={gens}"
+
+
+def run_pokedoku(settings: GameSettings) -> None:
     dex = load_dex()
-    settings = _settings_menu()
     custom = _input_bool("Build a custom Pokedoku grid?", False)
     if custom:
         print("Enter 3 row constraints and 3 column constraints.")
@@ -162,9 +166,8 @@ def run_pokedoku() -> None:
         print(warning)
 
 
-def run_squirdle() -> None:
+def run_squirdle(settings: GameSettings) -> None:
     dex = load_dex()
-    settings = _settings_menu()
     pool = dex.filtered(settings)
     max_guesses = _input_guess_count("How many guesses for Squirdle?", 8)
     target = random.choice(pool)
@@ -191,11 +194,10 @@ def run_squirdle() -> None:
     print(f"Out of guesses. Target was {target.name}.")
 
 
-def run_stat_quiz() -> None:
+def run_stat_quiz(settings: GameSettings) -> None:
     global LAST_STAT_QUIZ
 
     dex = load_dex()
-    settings = _settings_menu()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
@@ -235,9 +237,8 @@ def run_stat_quiz() -> None:
     print(f"Nope. It was {mon.name}.")
 
 
-def run_whos_that_pokemon() -> None:
+def run_whos_that_pokemon(settings: GameSettings) -> None:
     dex = load_dex()
-    settings = _settings_menu()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
@@ -267,9 +268,8 @@ def run_whos_that_pokemon() -> None:
     print(f"Out of guesses. It was {target.name}.")
 
 
-def run_statle() -> None:
+def run_statle(settings: GameSettings) -> None:
     dex = load_dex()
-    settings = _settings_menu()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
@@ -314,9 +314,8 @@ def run_statle() -> None:
     print(format_optimal_statle_summary(round_mons, plan, optimal_total, your_total=final))
 
 
-def run_dexacted() -> None:
+def run_dexacted(settings: GameSettings) -> None:
     dex = load_dex()
-    settings = _settings_menu()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
@@ -365,8 +364,10 @@ def run_dexacted() -> None:
 
 
 def main() -> None:
+    settings = GameSettings()
     while True:
         print("\n=== PokeQuiz ===")
+        print(f"Global settings: {_settings_summary(settings)}")
         print("Choose quiz mode:")
         print("1) Pokedoku")
         print("2) Squirdle")
@@ -374,21 +375,25 @@ def main() -> None:
         print("4) Statle builder")
         print("5) Who's that Pokemon!?")
         print("6) Dexacted")
-        print("7) Quit")
+        print("7) Settings")
+        print("8) Quit")
         choice = input("> ").strip()
         if choice == "1":
-            run_pokedoku()
+            run_pokedoku(settings)
         elif choice == "2":
-            run_squirdle()
+            run_squirdle(settings)
         elif choice == "3":
-            run_stat_quiz()
+            run_stat_quiz(settings)
         elif choice == "4":
-            run_statle()
+            run_statle(settings)
         elif choice == "5":
-            run_whos_that_pokemon()
+            run_whos_that_pokemon(settings)
         elif choice == "6":
-            run_dexacted()
+            run_dexacted(settings)
         elif choice == "7":
+            settings = _settings_menu()
+            print(f"Updated settings: {_settings_summary(settings)}")
+        elif choice == "8":
             break
         else:
             print("Unknown choice.")
