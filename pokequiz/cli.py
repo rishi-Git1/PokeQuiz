@@ -3,7 +3,13 @@ from __future__ import annotations
 import random
 
 from pokequiz.data import load_dex
+from pokequiz.games.daycare_detective import daycare_profile_for_name, gender_rate_label
 from pokequiz.games.dexacted import dex_entries_for_name
+from pokequiz.games.evolutionary_enigma import (
+    build_challenge as build_evolution_enigma_challenge,
+    details_signature as evolution_details_signature,
+    guess_matches_signature,
+)
 from pokequiz.games.movepool_madness import build_challenge, display_move_name, guess_satisfies_moves, legal_moves_for_name
 from pokequiz.games.pokedoku import (
     custom_constraints,
@@ -423,6 +429,124 @@ def run_movepool_madness(settings: GameSettings) -> None:
     print(f"Out of guesses. One valid answer was {target.name}.")
 
 
+def run_daycare_detective(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    target = random.choice(pool)
+    try:
+        profile = daycare_profile_for_name(target.name)
+    except Exception:
+        print("Could not load daycare profile data right now (API issue).")
+        return
+
+    max_guesses = _input_guess_count("How many guesses for Daycare Detective?", 5)
+    print("Daycare Detective: identify the Pokémon from breeding/species profile data.")
+    print(f"Clue 1 - Egg Groups: {', '.join(profile.egg_groups) if profile.egg_groups else 'Unknown'}")
+    print(f"Clue 2 - Gender Ratio: {gender_rate_label(profile.gender_rate)}")
+    print(f"Clue 3 - Hatch Counter: {profile.hatch_counter}")
+    print(f"Clue 4 - Capture Rate: {profile.capture_rate}")
+
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Daycare Detective. The answer was {target.name}.")
+            return
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        if guess.name == target.name:
+            print("Correct!")
+            return
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. It was {target.name}.")
+
+
+def run_evolutionary_enigma(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    try:
+        edge, clues = build_evolution_enigma_challenge([p.name for p in pool])
+    except ValueError as err:
+        print(err)
+        return
+    signature = evolution_details_signature(edge.details)
+
+    max_guesses = _input_guess_count("How many guesses for Evolutionary Enigma?", 5)
+    print("Evolutionary Enigma: deduce the evolution pair from trigger clues.")
+    print("You can answer with either the Pokémon evolving from this condition OR evolving into it.")
+    print("Commands: clue (reveal next clue), quit")
+
+    revealed = 1
+    print(f"\nClue 1/{len(clues)}: {clues[0]}")
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f"Leaving Evolutionary Enigma. This clue profile included {edge.from_name} -> {edge.to_name}.")
+            return
+        if cmd in {"clue", "c", "hint"}:
+            if revealed >= len(clues):
+                print("No more clues to reveal.")
+            else:
+                print(f"Clue {revealed + 1}/{len(clues)}: {clues[revealed]}")
+                revealed += 1
+            continue
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        if guess_matches_signature(guess.name, signature):
+            print(f"Correct! This clue describes {edge.from_name} evolving into {edge.to_name}.")
+            return
+
+        print("Nope.")
+        if revealed < len(clues):
+            print(f"Clue {revealed + 1}/{len(clues)}: {clues[revealed]}")
+            revealed += 1
+        turn += 1
+
+    print(f"Out of guesses. This clue profile included {edge.from_name} -> {edge.to_name}.")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -436,8 +560,10 @@ def main() -> None:
         print("5) Who's that Pokemon!?")
         print("6) Dexacted")
         print("7) Movepool Madness")
-        print("8) Settings")
-        print("9) Quit")
+        print("8) Daycare Detective")
+        print("9) Evolutionary Enigma")
+        print("10) Settings")
+        print("11) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku(settings)
@@ -454,9 +580,13 @@ def main() -> None:
         elif choice == "7":
             run_movepool_madness(settings)
         elif choice == "8":
+            run_daycare_detective(settings)
+        elif choice == "9":
+            run_evolutionary_enigma(settings)
+        elif choice == "10":
             settings = _settings_menu()
             print(f"Updated settings: {_settings_summary(settings)}")
-        elif choice == "9":
+        elif choice == "11":
             break
         else:
             print("Unknown choice.")
