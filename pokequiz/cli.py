@@ -1115,6 +1115,111 @@ def run_category_quiz(settings: GameSettings) -> None:
     print(f"Out of guesses. One matching answer was {target.name}.")
 
 
+def run_stat_sorter(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 3:
+        print("Not enough Pokémon in current filter for Stat Sorter.")
+        return
+
+    max_size = min(8, len(pool))
+    while True:
+        raw_count = input(f"How many Pokémon to sort? (min 3, max {max_size}, default 3): ").strip()
+        if not raw_count:
+            pick_count = 3
+            break
+        if raw_count.isdigit() and 3 <= int(raw_count) <= max_size:
+            pick_count = int(raw_count)
+            break
+        print(f"Enter a whole number from 3 to {max_size}.")
+
+    stat_key_map = {
+        "hp": "HP",
+        "attack": "Attack",
+        "defense": "Defense",
+        "special_attack": "Special Attack",
+        "special_defense": "Special Defense",
+        "speed": "Speed",
+    }
+    stat_key = random.choice(list(stat_key_map.keys()))
+    mons = random.sample(pool, k=pick_count)
+    random.shuffle(mons)
+    max_guesses = _input_guess_count("How many guesses for Stat Sorter?", 3)
+
+    print(f"Stat Sorter: order these Pokémon by {stat_key_map[stat_key]} (highest to lowest).")
+    print("Enter either numbers or names in order, separated by commas/spaces (e.g. '2,1,3').")
+    for idx, mon in enumerate(mons, start=1):
+        print(f"{idx}) {mon.name}")
+
+    correct_sorted = sorted(mons, key=lambda m: getattr(m, stat_key), reverse=True)
+    correct_names = [m.name for m in correct_sorted]
+    valid_names = {m.name for m in mons}
+
+    seen_submissions: set[tuple[str, ...]] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Order guess {turn}/{max_guesses} (or 'quit'): ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            pretty = " -> ".join(f"{m.name} ({getattr(m, stat_key)})" for m in correct_sorted)
+            print(f"Leaving Stat Sorter. Correct order was: {pretty}")
+            return
+
+        parts = [p for p in raw.replace(",", " ").split() if p]
+        if len(parts) != len(mons):
+            print(f"Enter exactly {len(mons)} entries.")
+            continue
+
+        chosen_names: list[str] = []
+        bad = False
+        for p in parts:
+            if p.isdigit():
+                idx = int(p)
+                if not (1 <= idx <= len(mons)):
+                    print(f"Index out of range: {p}")
+                    bad = True
+                    break
+                chosen_names.append(mons[idx - 1].name)
+            else:
+                guessed = dex.by_name(p)
+                if not guessed:
+                    print(f'Unknown Pokémon: "{p}"')
+                    bad = True
+                    break
+                if guessed.name not in valid_names:
+                    print(f'"{guessed.name}" is not one of the listed Pokémon.')
+                    bad = True
+                    break
+                chosen_names.append(guessed.name)
+        if bad:
+            continue
+        if len(set(chosen_names)) != len(chosen_names):
+            print("Do not repeat entries; use each listed Pokémon exactly once.")
+            continue
+
+        submission = tuple(chosen_names)
+        if submission in seen_submissions:
+            print("You already tried that exact order. Try a different one.")
+            continue
+        seen_submissions.add(submission)
+
+        # Accept ties in any order by checking non-increasing stat values.
+        if set(chosen_names) == valid_names:
+            vals = [getattr(dex.by_name(n), stat_key) for n in chosen_names]  # type: ignore[arg-type]
+            if all(vals[i] >= vals[i + 1] for i in range(len(vals) - 1)):
+                pretty = " -> ".join(f"{n} ({getattr(dex.by_name(n), stat_key)})" for n in chosen_names)  # type: ignore[arg-type]
+                print(f"Correct! {pretty}")
+                return
+
+        print("Nope.")
+        turn += 1
+
+    pretty = " -> ".join(f"{m.name} ({getattr(m, stat_key)})" for m in correct_sorted)
+    print(f"Out of guesses. Correct order was: {pretty}")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -1138,6 +1243,7 @@ def main() -> None:
         print("14) Thief's Target")
         print("15) Ugly Ducklett")
         print("16) Category Quiz")
+        print("17) Stat Sorter")
         choice = input("> ").strip()
         cmd = choice.casefold()
         if cmd in {"settings", "s"}:
@@ -1178,6 +1284,8 @@ def main() -> None:
             run_odd_one_out(settings)
         elif choice == "16":
             run_category_quiz(settings)
+        elif choice == "17":
+            run_stat_sorter(settings)
         else:
             print("Unknown choice.")
 
