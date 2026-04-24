@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 
 from pokequiz.data import load_dex
+from pokequiz.games.ability_assessor import ability_profile_for_name, display_ability_name, profile_matches
 from pokequiz.games.daycare_detective import daycare_profile_for_name, gender_rate_label
 from pokequiz.games.dexacted import dex_entries_for_name
 from pokequiz.games.evolutionary_enigma import (
@@ -215,9 +216,9 @@ def run_stat_quiz(settings: GameSettings) -> None:
         alternatives = [p for p in pool if p.name != LAST_STAT_QUIZ]
         mon = random.choice(alternatives)
     LAST_STAT_QUIZ = mon.name
-    max_guesses = _input_guess_count("How many guesses for Stat identity quiz?", 3)
+    max_guesses = _input_guess_count("How many guesses for Pokedentities?", 3)
 
-    print("Identify this Pokémon from stats:")
+    print("Pokedentities: identify this Pokémon from stats:")
     print(prompt_for_mon(mon))
     seen_guesses: set[str] = set()
     hint_turn = max_guesses - 1 if max_guesses > 1 else None
@@ -539,12 +540,97 @@ def run_evolutionary_enigma(settings: GameSettings) -> None:
             return
 
         print("Nope.")
-        if revealed < len(clues):
-            print(f"Clue {revealed + 1}/{len(clues)}: {clues[revealed]}")
-            revealed += 1
         turn += 1
 
     print(f"Out of guesses. This clue profile included {edge.from_name} -> {edge.to_name}.")
+
+
+def run_ability_assessor(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    target = random.choice(pool)
+    try:
+        profile = ability_profile_for_name(target.name)
+    except Exception:
+        print("Could not load ability data right now (API issue).")
+        return
+
+    # Build clue set from available abilities only, then reveal one-by-one.
+    clues: list[str] = []
+    if profile.ability_1:
+        clues.append(f"Ability 1: {display_ability_name(profile.ability_1)}")
+    if profile.hidden_ability:
+        clues.append(f"Hidden Ability: {display_ability_name(profile.hidden_ability)}")
+    if profile.ability_2:
+        clues.append(f"Ability 2: {display_ability_name(profile.ability_2)}")
+    if not clues:
+        print("This Pokémon has no usable ability profile for this mode. Try again.")
+        return
+    random.shuffle(clues)
+
+    max_guesses = _input_guess_count("How many guesses for Ability Assessor?", 5)
+    print("Ability Assessor: guess a Pokémon matching this ability combination.")
+    print("Commands: clue (reveal next clue), quit")
+    revealed = 1
+    print(f"\nClue 1/{len(clues)}: {clues[0]}")
+
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Ability Assessor. One matching profile was: "
+                f"{target.name} ({', '.join(clues)})."
+            )
+            return
+        if cmd in {"clue", "c", "hint"}:
+            if revealed >= len(clues):
+                print("No more clues to reveal.")
+            else:
+                print(f"Clue {revealed + 1}/{len(clues)}: {clues[revealed]}")
+                revealed += 1
+            continue
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        try:
+            g_profile = ability_profile_for_name(guess.name)
+        except Exception:
+            print("Could not validate that guess right now (API issue). Try again.")
+            continue
+
+        if profile_matches(
+            g_profile,
+            ability_1=profile.ability_1,
+            ability_2=profile.ability_2,
+            hidden_ability=profile.hidden_ability,
+        ):
+            print(f"Correct! {guess.name} matches this ability profile.")
+            return
+
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. One matching profile was {target.name}.")
 
 
 def main() -> None:
@@ -555,15 +641,16 @@ def main() -> None:
         print("Choose quiz mode:")
         print("1) Pokedoku")
         print("2) Squirdle")
-        print("3) Stat identity quiz")
+        print("3) Pokedentities")
         print("4) Statle builder")
         print("5) Who's that Pokemon!?")
         print("6) Dexacted")
         print("7) Movepool Madness")
         print("8) Daycare Detective")
         print("9) Evolutionary Enigma")
-        print("10) Settings")
-        print("11) Quit")
+        print("10) Ability Assessor")
+        print("11) Settings")
+        print("12) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku(settings)
@@ -584,9 +671,11 @@ def main() -> None:
         elif choice == "9":
             run_evolutionary_enigma(settings)
         elif choice == "10":
+            run_ability_assessor(settings)
+        elif choice == "11":
             settings = _settings_menu()
             print(f"Updated settings: {_settings_summary(settings)}")
-        elif choice == "11":
+        elif choice == "12":
             break
         else:
             print("Unknown choice.")
