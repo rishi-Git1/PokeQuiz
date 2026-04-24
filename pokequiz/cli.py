@@ -20,6 +20,13 @@ from pokequiz.games.defensive_profile import defensive_types_for_name, grouped_m
 from pokequiz.games.dexacted import dex_entries_for_name
 from pokequiz.games.ev_forensic import ev_yield_line as ev_forensic_ev_yield_line
 from pokequiz.games.ev_forensic import profile_for_name as ev_forensic_profile_for_name
+from pokequiz.games.growth_rate_guess import build_challenge as build_growth_rate_challenge
+from pokequiz.games.growth_rate_guess import (
+    describe_order,
+    format_option_summary,
+    parse_ranking_line,
+    question_line,
+)
 from pokequiz.games.evolutionary_enigma import (
     build_challenge as build_evolution_enigma_challenge,
     details_signature as evolution_details_signature,
@@ -1907,6 +1914,63 @@ def run_international_names(settings: GameSettings) -> bool | None:
         return False
 
 
+def run_growth_rate_guesstimate(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 3:
+        print("Need at least three Pokémon in the current filter for Growth Rate Guesstimate.")
+        return None
+
+    challenge = build_growth_rate_challenge(pool)
+    if challenge is None:
+        print(
+            "Could not build a round (need three species with different level-100 XP totals, "
+            "or a network/API issue). Try again or widen filters."
+        )
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Growth Rate Guesstimate?", 3)
+    print()
+    print("Growth Rate Guesstimate (PokéAPI growth-rate curves; no mid-round hints).")
+    print(question_line(challenge))
+    print("Each guess is one line with all three choices in order (letters, numbers, or names).")
+    for letter, name in zip(("A", "B", "C"), challenge.labels, strict=True):
+        print(f"  {letter}) {name}")
+    print()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Order line {turn}/{max_guesses}: ")
+        if not raw.strip():
+            print("Enter three entries on one line (cannot be blank).")
+            continue
+        if raw.strip().casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Growth Rate Guesstimate. Correct order was: {describe_order(challenge, challenge.correct_order)}")
+            for i in range(3):
+                print(f"  {format_option_summary(challenge, i)}")
+            return False
+
+        ranking = parse_ranking_line(raw, dex, challenge)
+        if ranking is None:
+            print('Need exactly three tokens (e.g. "B C A"), each A/B/C, 1/2/3, or one of the listed names, no repeats.')
+            continue
+
+        if ranking == challenge.correct_order:
+            print("Correct!")
+            print(f"  {describe_order(challenge, ranking)}")
+            bgm.play_completion_sound()
+            return True
+
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. Correct order was: {describe_order(challenge, challenge.correct_order)}")
+    for i in range(3):
+        print(f"  {format_option_summary(challenge, i)}")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -1959,6 +2023,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "19) Missing Link")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "20) EV Forensic")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "21) International Names")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "22) Growth Rate Guesstimate")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2009,6 +2074,8 @@ def main() -> None:
                 _route_bgm_after_game(run_ev_forensic(settings))
             elif choice == "21":
                 _route_bgm_after_game(run_international_names(settings))
+            elif choice == "22":
+                _route_bgm_after_game(run_growth_rate_guesstimate(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
