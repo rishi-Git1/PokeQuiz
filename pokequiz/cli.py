@@ -11,6 +11,8 @@ from pokequiz.games.evolutionary_enigma import (
     details_signature as evolution_details_signature,
     guess_matches_signature,
 )
+from pokequiz.games.level_ladder import display_move_name as display_level_move_name
+from pokequiz.games.level_ladder import level_up_moves_for_name
 from pokequiz.games.movepool_madness import build_challenge, display_move_name, guess_satisfies_moves, legal_moves_for_name
 from pokequiz.games.pokedoku import (
     custom_constraints,
@@ -633,6 +635,89 @@ def run_ability_assessor(settings: GameSettings) -> None:
     print(f"Out of guesses. One matching profile was {target.name}.")
 
 
+def run_level_ladder(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    # Find a target that has enough level-up moves to make clue progression meaningful.
+    candidates = pool[:]
+    random.shuffle(candidates)
+    target = None
+    moves: list[tuple[int, str]] = []
+    for mon in candidates:
+        try:
+            lm = list(level_up_moves_for_name(mon.name))
+        except Exception:
+            continue
+        if len(lm) >= 3:
+            target = mon
+            moves = lm
+            break
+    if target is None:
+        print("Could not find enough level-up learnset data for this filter set.")
+        return
+
+    reverse_mode = _input_bool("Use reverse mode (show highest-level moves first)?", False)
+    ordered = list(reversed(moves)) if reverse_mode else moves
+    clues = [f"Level {lvl}: {display_level_move_name(move)}" for lvl, move in ordered]
+
+    max_guesses = _input_guess_count("How many guesses for Level Ladder?", 5)
+    print("Level Ladder: deduce the Pokémon from its level-up learnset clues.")
+    print("Commands: clue (reveal next clue), quit")
+    print(f"\nHint 1/{len(clues)}: {clues[0]}")
+    revealed = 1
+
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f"Leaving Level Ladder. The answer was {target.name}.")
+            return
+        if cmd in {"clue", "c", "hint"}:
+            if revealed >= len(clues):
+                print("No more hints to reveal.")
+            else:
+                print(f"Hint {revealed + 1}/{len(clues)}: {clues[revealed]}")
+                revealed += 1
+            continue
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        try:
+            guess_moves = list(level_up_moves_for_name(guess.name))
+        except Exception:
+            print("Could not validate that guess right now (API issue). Try again.")
+            continue
+        guess_ordered = list(reversed(guess_moves)) if reverse_mode else guess_moves
+        target_revealed = ordered[:revealed]
+        guess_revealed = guess_ordered[:revealed]
+        if len(guess_revealed) == len(target_revealed) and guess_revealed == target_revealed:
+            print(f"Correct! {guess.name} matches the revealed Level Ladder sequence.")
+            return
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. It was {target.name}.")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -649,8 +734,9 @@ def main() -> None:
         print("8) Daycare Detective")
         print("9) Evolutionary Enigma")
         print("10) Ability Assessor")
-        print("11) Settings")
-        print("12) Quit")
+        print("11) Level Ladder")
+        print("12) Settings")
+        print("13) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku(settings)
@@ -673,9 +759,11 @@ def main() -> None:
         elif choice == "10":
             run_ability_assessor(settings)
         elif choice == "11":
+            run_level_ladder(settings)
+        elif choice == "12":
             settings = _settings_menu()
             print(f"Updated settings: {_settings_summary(settings)}")
-        elif choice == "12":
+        elif choice == "13":
             break
         else:
             print("Unknown choice.")
