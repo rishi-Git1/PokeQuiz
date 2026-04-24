@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 
 from pokequiz.data import load_dex
+from pokequiz.games.dexacted import dex_entries_for_name
 from pokequiz.games.pokedoku import (
     custom_constraints,
     format_pokedoku_grid,
@@ -308,6 +309,56 @@ def run_statle() -> None:
     print(format_optimal_statle_summary(round_mons, plan, optimal_total, your_total=final))
 
 
+def run_dexacted() -> None:
+    dex = load_dex()
+    settings = _settings_menu()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    target = random.choice(pool)
+    entries = list(dex_entries_for_name(target.name))
+    if not entries:
+        print("No dex entries available for that Pokémon right now. Try another round.")
+        return
+    random.shuffle(entries)
+
+    revealed = 1
+    print("Dexacted mode: guess the Pokémon from Pokédex entries.")
+    print("Commands: entry (reveal another entry), quit (leave game), or type a Pokémon guess.")
+    print(f"\nEntry 1/{len(entries)}: {entries[0]}")
+
+    while True:
+        raw = input("Dexacted> ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        command = raw.casefold()
+        if command in {"quit", "q", "exit"}:
+            print(f"Leaving Dexacted. The answer was {target.name}.")
+            return
+        if command in {"entry", "e", "next", "hint"}:
+            if revealed >= len(entries):
+                print("No more dex entries available.")
+            else:
+                print(f"Entry {revealed + 1}/{len(entries)}: {entries[revealed]}")
+                revealed += 1
+            continue
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if guess.name == target.name:
+            print("Correct!")
+            return
+        if revealed >= len(entries):
+            print(f"Wrong guess and no entries left. You lose. It was {target.name}.")
+            return
+        print("Nope. Ask for another entry or guess again.")
+
+
 def main() -> None:
     while True:
         print("\n=== PokeQuiz ===")
@@ -317,7 +368,8 @@ def main() -> None:
         print("3) Stat identity quiz")
         print("4) Statle builder")
         print("5) Who's that Pokemon!?")
-        print("6) Quit")
+        print("6) Dexacted")
+        print("7) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku()
@@ -330,6 +382,8 @@ def main() -> None:
         elif choice == "5":
             run_whos_that_pokemon()
         elif choice == "6":
+            run_dexacted()
+        elif choice == "7":
             break
         else:
             print("Unknown choice.")
