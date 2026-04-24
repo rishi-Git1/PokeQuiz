@@ -146,6 +146,9 @@ def run_pokedoku(settings: GameSettings) -> None:
             print()
             print(POKEDOKU_CUSTOM_CONSTRAINT_HELP)
             continue
+        if low0 in ("quit", "q", "exit"):
+            print("Leaving Pokedoku.")
+            return
         if low0 == "done":
             break
         if low0 in ("clear", "c", "x") and len(parts) >= 3:
@@ -192,6 +195,7 @@ def run_squirdle(settings: GameSettings) -> None:
     pool = dex.filtered(settings)
     max_guesses = _input_guess_count("How many guesses for Squirdle?", 8)
     target = random.choice(pool)
+    seen_guesses: set[str] = set()
     print(f"Guess the Pokémon. You get {max_guesses} guesses.")
     for turn in range(1, max_guesses + 1):
         while True:
@@ -199,6 +203,9 @@ def run_squirdle(settings: GameSettings) -> None:
             if not guess_name:
                 print("Guess cannot be blank.")
                 continue
+            if guess_name.casefold() in {"quit", "q", "exit"}:
+                print(f"Leaving Squirdle. Target was {target.name}.")
+                return
             guess = dex.by_name(guess_name)
             if not guess:
                 print(f'Unknown Pokémon: "{guess_name}"')
@@ -206,6 +213,10 @@ def run_squirdle(settings: GameSettings) -> None:
             if not settings.accepts(guess):
                 print("That Pokémon is outside your current generation/variant filters.")
                 continue
+            if guess.name in seen_guesses:
+                print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+                continue
+            seen_guesses.add(guess.name)
             break
         if guess.name == target.name:
             print("Correct!")
@@ -241,6 +252,9 @@ def run_stat_quiz(settings: GameSettings) -> None:
             if not guess:
                 print("Guess cannot be blank.")
                 continue
+            if guess.casefold() in {"quit", "q", "exit"}:
+                print(f"Leaving Pokedentities. It was {mon.name}.")
+                return
             guessed_mon = dex.by_name(guess)
             if not guessed_mon:
                 print(f'Unknown Pokémon: "{guess}"')
@@ -267,6 +281,7 @@ def run_whos_that_pokemon(settings: GameSettings) -> None:
 
     max_guesses = _input_guess_count("How many guesses for Who's that Pokemon!?", 3)
     target = random.choice(pool)
+    seen_guesses: set[str] = set()
 
     print("Who's that Pokemon!?")
     print_statle_sprite(target)
@@ -276,10 +291,17 @@ def run_whos_that_pokemon(settings: GameSettings) -> None:
             if not guess_name:
                 print("Guess cannot be blank.")
                 continue
+            if guess_name.casefold() in {"quit", "q", "exit"}:
+                print(f"Leaving Who's that Pokemon!?. It was {target.name}.")
+                return
             guess = dex.by_name(guess_name)
             if not guess:
                 print(f'Unknown Pokémon: "{guess_name}"')
                 continue
+            if guess.name in seen_guesses:
+                print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+                continue
+            seen_guesses.add(guess.name)
             break
         if guess.name == target.name:
             print("Correct!")
@@ -313,15 +335,21 @@ def run_statle(settings: GameSettings) -> None:
         print("Choose one remaining stat:")
         for idx, stat in enumerate(available, start=1):
             print(f"{idx}) {STAT_LABELS[stat]}")
-
-        raw_pick = input("> ").strip()
-        if raw_pick.isdigit() and 1 <= int(raw_pick) <= len(available):
-            stat = available[int(raw_pick) - 1]
-        else:
+        while True:
+            raw_pick = input("> ").strip()
+            if not raw_pick:
+                print("Input cannot be blank.")
+                continue
+            if raw_pick.casefold() in {"quit", "q", "exit"}:
+                print("Leaving Statle.")
+                return
+            if raw_pick.isdigit() and 1 <= int(raw_pick) <= len(available):
+                stat = available[int(raw_pick) - 1]
+                break
             stat = raw_pick.casefold().replace(" ", "_")
-            if stat not in available:
-                print(f"Invalid or already-used stat; defaulting to {STAT_LABELS[available[0]]}.")
-                stat = available[0]
+            if stat in available:
+                break
+            print("Invalid or already-used stat. Choose one of the remaining stats.")
 
         picked_stats.append(stat)
         result = resolve_turn(mon, stat)
