@@ -1,116 +1,111 @@
 # PokeQuiz
 
-PokeQuiz is a terminal-based, multi-mode Pokemon quiz game powered by PokeAPI data (with `pokebase` support and robust fallbacks).
+PokeQuiz is a terminal-based collection of Pokemon quiz and deduction modes powered by PokeAPI (with `pokebase` support and local caching).
 
-## Game Modes
+## Requirements
 
-- **Pokedoku (3x3)**  
-  Fill a 3x3 board where each cell must satisfy one row constraint and one column constraint.
-- **Squirdle-style guessing**  
-  Guess the target Pokemon with directional feedback (generation, height, weight, BST) plus slot-based type feedback.
-- **Stat Identity Quiz**  
-  Guess the Pokemon from base stats with progressive hinting.
-- **Statle Builder**  
-  Six rounds, one revealed Pokemon per round, pick one unused stat each round, then see your final score and the mathematically optimal score/path.
-
-## Data Loading
-
-`load_dex()` uses this order:
-
-1. Existing local cache (`.cache/pokemon_minidex.json`) if it is large enough.
-2. `pokebase` bulk fetch.
-3. Direct PokeAPI fetch (with a custom User-Agent).
-4. Tiny emergency fallback list.
-
-Notes:
-
-- Tiny fallback data is **not** persisted as a cache.
-- Name matching is forgiving (case/spacing/punctuation tolerant; e.g. `Ting Lu` matches `ting-lu`).
-- Unknown guesses are echoed back to the player in guessing modes.
+- Python `>=3.11`
+- Internet access for live API-backed modes
 
 ## Install
-
-Python 3.11+ is required.
 
 ```bash
 python -m pip install -e .
 ```
 
-Dependencies include:
+This installs the project plus runtime dependencies:
 
 - `pokebase`
-- `pillow` (used for Statle ASCII sprite rendering)
+- `pillow` (for ASCII sprite rendering)
 
 ## Run
+
+Use either command:
 
 ```bash
 python -m pokequiz.cli
 ```
 
-or via script entrypoint:
+or:
 
 ```bash
 pokequiz
 ```
 
-## Pokedoku
+## Main Menu Notes
 
-### Board Input Commands
+- Global filters (megas, regionals, generations) are shared by all modes.
+- At the main prompt:
+  - type `settings` to edit filters
+  - type `quit` to exit
 
-During board entry:
+## Data Notes
 
-- `<row> <col> <pokemon name>`: set/replace a cell
-- `clear <row> <col>` (also `c` or `x`): clear a cell
-- `done`: score board
-- `help` or `syntax`: show command and constraint syntax
+Dex loading order:
 
-The board is re-rendered before each input, with row/column constraints and current answers.
+1. local cache (`.cache/pokemon_minidex.json`) if large enough
+2. `pokebase` bulk fetch
+3. direct PokeAPI fallback
+4. tiny emergency fallback list
 
-### Custom Constraint Syntax
+Name matching is tolerant of punctuation/case/spacing in most guess-based modes.
 
-Provide 3 row constraints and 3 column constraints.
+## Game Modes
 
-- Standard format: `kind:value`
-- Special no-value format: `secondary_type-none`
+### 1) Pokedoku
+Build or auto-generate a 3x3 constraint grid and fill each cell with a valid Pokemon. Supports command-driven board editing and custom constraints (`type`, `generation`, BST/height/weight bounds, first/last letter, `secondary_type-none`).
 
-Supported kinds:
+### 2) Squirdle
+Guess the target with directional comparisons (generation/height/weight/BST) plus positional type-slot feedback and cross-slot type hints.
 
-- `type` (example: `type:fire`)
-- `generation` (example: `generation:4`)
-- `bst-over` / `bst-under` (example: `bst-over:500`)
-- `height-over` / `height-under` (example: `height-under:15`)
-- `weight-over` / `weight-under` (example: `weight-over:1000`)
-- `first-letter` / `last-letter` (single letter; example: `first-letter:c`)
-- `secondary_type-none`
+### 3) Pokedentities
+Guess the Pokemon from base stats. Guess count is configurable per run.
 
-Scoring rules:
+### 4) Statle
+Choose one unused stat per round across six revealed Pokemon, then compare your total to the optimal assignment. Includes optional ASCII sprite rendering.
 
-- Duplicate Pokemon answers in the same board are not allowed.
-- Answers must satisfy both intersecting constraints and current game filters.
+### 5) Who's that Pokemon!?
+Sprite-first guessing mode: identify the hidden Pokemon from its rendered sprite.
 
-## Squirdle Feedback
+### 6) Dexacted
+Guess from Pokédex flavor text entries. Entries can be revealed one-by-one, and the target name is redacted with fixed `-------`.
 
-Each valid guess returns:
+### 7) Movepool Madness
+Given four moves, guess any Pokemon that can legally learn all four (level-up, machine, or egg).
 
-- Generation: `higher` / `lower` / `equal`
-- Height: `higher` / `lower` / `equal`
-- Weight: `higher` / `lower` / `equal`
-- BST: `higher` / `lower` / `equal`
-- Type slot 1: `correct` / `incorrect` + guessed slot value
-- Type slot 2: `correct` / `incorrect` + guessed slot value (`none` for mono-type)
-- Cross-slot hints when relevant:
-  - guessed type 2 matches answer type 1
-  - guessed type 1 matches answer type 2
+### 8) Daycare Detective
+Deduce from breeding/species metadata: egg groups, gender ratio, hatch counter, capture rate.
 
-## Statle Sprites
+### 9) Evolutionary Enigma
+Guess from evolution trigger conditions (item/time/location/happiness/etc.). Clues are user-revealed; any guess matching the condition signature is accepted.
 
-Statle attempts to render each round's Pokemon sprite as ASCII art.
+### 10) Ability Assessor
+Guess based on Ability 1 / Ability 2 / Hidden Ability combination. Clues are manually revealed.
 
-If sprites do not appear, install Pillow into the same interpreter used to run the game:
+### 11) Level Ladder
+Deduce from a Pokemon’s level-up learnset sequence. Includes normal and reverse progression modes with manual clue reveal.
 
-```bash
-python -m pip install pillow
-```
+### 12) Defensive Profile
+Guess from full defensive multiplier grouping (immunities, 4x/2x weaknesses, 0.5x/0.25x resistances). All clues shown up front.
 
-(If using a virtual environment, run that command with the venv's Python executable.)
+### 13) Safari Zone
+Guess from wild encounter location+method clues (`encounters` endpoint). Clues are revealed on request.
+
+### 14) Thief's Target
+Guess from wild held-item drop profile and rarity percentages. All clues shown up front.
+
+### 15) Ugly Ducklett
+Odd-one-out logic puzzle: one listed Pokemon does not share the hidden trait. Supports variable list size and many trait families (typing, stats, naming, ability, egg groups, capture-rate band).
+
+### 16) Category Quiz
+Anchored on Pokédex species category/genus plus user-selected clue fields (color, egg groups, type, generation, ability, etc.). Clues are manually chosen by the player.
+
+### 17) Stat Sorter
+Sort 3-8 randomly selected Pokemon by a random stat in descending order using one-line order input.
+
+### 18) Level Race
+Given one move and 2-5 Pokemon options, submit the correct full order by lowest level learned to highest.
+
+### 19) Missing Link
+One move is redacted from a level-up table; guess the missing move. Optional manual clues: type, damage class, then power (if damaging).
 
