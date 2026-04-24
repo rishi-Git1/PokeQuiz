@@ -109,3 +109,28 @@ Given one move and 2-5 Pokemon options, submit the correct full order by lowest 
 ### 19) Missing Link
 One move is redacted from a level-up table; guess the missing move. Optional manual clues: type, damage class, then power (if damaging).
 
+### 20) EV Forensic
+Deduce the species from EV yields shown up front, plus optional manually chosen species clues (generation, types, evolution stage, color, egg groups, primary ability, capture-rate band).
+
+### 21) International Names
+Guess the English species name from PokéAPI `ja-roma` (romanized Japanese), with optional one-at-a-time name clues in other languages.
+
+### 22) Growth Rate Guesstimate
+Three species are shown as A/B/C. Each round asks you to order them either **slowest → fastest** or **fastest → slowest** leveling, using total experience at level 100 from PokéAPI growth-rate data. Submit **one line with all three** (e.g. `B C A`, or three names/letters), with no mid-round hints.
+
+## Audio (optional)
+
+Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
+
+**Menu and modes**
+
+- **Menu / win BGM** — default filenames `littleroot.ogg`, `littleroot.mp3`, or `littleroot.wav`. After you **win** a mode and return to the hub, this loop plays again. Override: `POKEQUIZ_BGM`. Volume: `POKEQUIZ_BGM_VOLUME` (default `0.35`).
+- **Post-loss / quit BGM** — default `loser.ogg`, `loser.mp3`, or `loser.wav`. When you **lose** or **quit** a mode, menu BGM stops and this loop plays if present (otherwise BGM stays off until you win again). Override: `POKEQUIZ_LOSER_BGM`.
+
+**Sound effects**
+
+- **Input blip** (each line submitted) — `pokedex_select.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_INPUT_SFX`. Volume: `POKEQUIZ_INPUT_SFX_VOLUME`.
+- **Win / completion** — `completion.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_COMPLETION_SFX`. Volume: `POKEQUIZ_COMPLETION_SFX_VOLUME`.
+- **Last-guess warning** — `low_health.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_LOW_HEALTH_SFX`. Volume: `POKEQUIZ_LOW_HEALTH_SFX_VOLUME`.
+- **Shiny menu jingle** — `shiny_jingle.wav` / `.ogg` / `.mp3`; on startup, a random “shiny” colored menu and this jingle can trigger (~1 in 10) when the file exists (there is no separate mute for it in settings). Override: `POKEQUIZ_SHINY_JINGLE_SFX`. Volume: `POKEQUIZ_SHINY_JINGLE_VOLUME`.
+
