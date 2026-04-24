@@ -17,6 +17,8 @@ from pokequiz.games.evolutionary_enigma import (
 )
 from pokequiz.games.level_ladder import display_move_name as display_level_move_name
 from pokequiz.games.level_ladder import level_up_moves_for_name
+from pokequiz.games.level_race import build_challenge as build_level_race_challenge
+from pokequiz.games.level_race import display_move_name as display_level_race_move_name
 from pokequiz.games.movepool_madness import build_challenge, display_move_name, guess_satisfies_moves, legal_moves_for_name
 from pokequiz.games.odd_one_out import build_challenge as build_odd_one_out_challenge
 from pokequiz.games.pokedoku import (
@@ -1220,6 +1222,107 @@ def run_stat_sorter(settings: GameSettings) -> None:
     print(f"Out of guesses. Correct order was: {pretty}")
 
 
+def run_level_race(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 2:
+        print("Not enough Pokémon in current filter for Level Race.")
+        return
+
+    max_options = min(5, len(pool))
+    while True:
+        raw_count = input(f"How many options in Level Race? (min 2, max {max_options}, default 3): ").strip()
+        if not raw_count:
+            option_count = 3 if max_options >= 3 else max_options
+            break
+        if raw_count.isdigit() and 2 <= int(raw_count) <= max_options:
+            option_count = int(raw_count)
+            break
+        print(f"Enter a whole number from 2 to {max_options}.")
+
+    try:
+        move_name, options = build_level_race_challenge(pool, option_count=option_count)
+    except ValueError as err:
+        print(err)
+        return
+
+    max_guesses = _input_guess_count("How many guesses for Level Race?", 3)
+    print("Level Race (Move Learnsets): order these Pokémon by learn level (lowest to highest).")
+    print("Enter numbers or names in one line, separated by commas/spaces (e.g. '2,1,3').")
+    print(f"Move: {display_level_race_move_name(move_name)}")
+    for idx, (mon, _) in enumerate(options, start=1):
+        print(f"{idx}) {mon.name}")
+
+    correct_sorted = sorted(options, key=lambda x: x[1])  # low -> high
+    correct_names = [m.name for m, _ in correct_sorted]
+    option_name_set = {m.name for m, _ in options}
+    seen_submissions: set[tuple[str, ...]] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Order guess {turn}/{max_guesses} (or 'quit'): ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            details = " -> ".join(f"{m.name} (L{lvl})" for m, lvl in correct_sorted)
+            print(f"Leaving Level Race. Correct order was: {details}")
+            return
+
+        parts = [p for p in raw.replace(",", " ").split() if p]
+        if len(parts) != len(options):
+            print(f"Enter exactly {len(options)} entries.")
+            continue
+
+        chosen_names: list[str] = []
+        bad = False
+        for p in parts:
+            if p.isdigit():
+                idx = int(p)
+                if not (1 <= idx <= len(options)):
+                    print(f"Index out of range: {p}")
+                    bad = True
+                    break
+                chosen_names.append(options[idx - 1][0].name)
+            else:
+                guessed = dex.by_name(p)
+                if not guessed:
+                    print(f'Unknown Pokémon: "{p}"')
+                    bad = True
+                    break
+                if guessed.name not in option_name_set:
+                    print(f'"{guessed.name}" is not one of the listed options.')
+                    bad = True
+                    break
+                chosen_names.append(guessed.name)
+        if bad:
+            continue
+        if len(set(chosen_names)) != len(chosen_names):
+            print("Do not repeat entries; use each listed Pokémon exactly once.")
+            continue
+
+        submission = tuple(chosen_names)
+        if submission in seen_submissions:
+            print("You already tried that exact order. Try a different one.")
+            continue
+        seen_submissions.add(submission)
+
+        # Accept ties in any order by checking non-decreasing levels.
+        if set(chosen_names) == option_name_set:
+            lookup = {m.name: lvl for m, lvl in options}
+            levels = [lookup[n] for n in chosen_names]
+            if all(levels[i] <= levels[i + 1] for i in range(len(levels) - 1)):
+                details = " -> ".join(f"{n} (L{lookup[n]})" for n in chosen_names)
+                print(f"Correct! {details}")
+                return
+
+        print("Nope.")
+        turn += 1
+
+    details = " -> ".join(f"{m.name} (L{lvl})" for m, lvl in correct_sorted)
+    print(f"Out of guesses. Correct order was: {details}")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -1244,6 +1347,7 @@ def main() -> None:
         print("15) Ugly Ducklett")
         print("16) Category Quiz")
         print("17) Stat Sorter")
+        print("18) Level Race")
         choice = input("> ").strip()
         cmd = choice.casefold()
         if cmd in {"settings", "s"}:
@@ -1286,6 +1390,8 @@ def main() -> None:
             run_category_quiz(settings)
         elif choice == "17":
             run_stat_sorter(settings)
+        elif choice == "18":
+            run_level_race(settings)
         else:
             print("Unknown choice.")
 
