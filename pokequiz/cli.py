@@ -727,7 +727,7 @@ def main() -> None:
         print("1) Pokedoku")
         print("2) Squirdle")
         print("3) Pokedentities")
-        print("4) Statle builder")
+        print("4) Statle")
         print("5) Who's that Pokemon!?")
         print("6) Dexacted")
         print("7) Movepool Madness")
