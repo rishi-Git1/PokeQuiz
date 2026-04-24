@@ -210,6 +210,7 @@ def run_stat_quiz() -> None:
 
     print("Identify this Pokémon from stats:")
     print(prompt_for_mon(mon))
+    seen_guesses: set[str] = set()
     hint_turn = max_guesses - 1 if max_guesses > 1 else None
     for tries in range(1, max_guesses + 1):
         while True:
@@ -221,6 +222,10 @@ def run_stat_quiz() -> None:
             if not guessed_mon:
                 print(f'Unknown Pokémon: "{guess}"')
                 continue
+            if guessed_mon.name in seen_guesses:
+                print(f'You already guessed "{guessed_mon.name}". Try a different Pokémon.')
+                continue
+            seen_guesses.add(guessed_mon.name)
             break
         if is_correct_guess(mon, guess):
             print("Correct!")
