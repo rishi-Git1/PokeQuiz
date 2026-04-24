@@ -4,6 +4,7 @@ import random
 
 from pokequiz.data import load_dex
 from pokequiz.games.dexacted import dex_entries_for_name
+from pokequiz.games.movepool_madness import build_challenge, display_move_name, guess_satisfies_moves, legal_moves_for_name
 from pokequiz.games.pokedoku import (
     custom_constraints,
     format_pokedoku_grid,
@@ -363,6 +364,65 @@ def run_dexacted(settings: GameSettings) -> None:
         print("Nope. Ask for another entry or guess again.")
 
 
+def run_movepool_madness(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    try:
+        target, required_moves = build_challenge(pool)
+    except ValueError as err:
+        print(err)
+        return
+
+    max_guesses = _input_guess_count("How many guesses for Movepool Madness?", 5)
+    print("Movepool Madness: name any Pokémon that can legally learn ALL four moves.")
+    print("(Legal methods: level-up, TM/machine, or egg/breeding.)")
+    for idx, move in enumerate(required_moves, start=1):
+        print(f"{idx}) {display_move_name(move)}")
+
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Movepool Madness. One valid answer was {target.name}.")
+            return
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        try:
+            if guess_satisfies_moves(guess.name, required_moves):
+                print(f"Correct! {guess.name} can learn all four.")
+                return
+            learned = set(legal_moves_for_name(guess.name))
+            missing = [display_move_name(m) for m in required_moves if m not in learned]
+            if missing:
+                print(f"Nope. {guess.name} is missing: {', '.join(missing)}")
+            else:
+                print(f"Nope. {guess.name} does not satisfy the four-move requirement.")
+            turn += 1
+        except Exception:
+            print("Could not validate that guess right now (API issue). Try again.")
+
+    print(f"Out of guesses. One valid answer was {target.name}.")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -375,8 +435,9 @@ def main() -> None:
         print("4) Statle builder")
         print("5) Who's that Pokemon!?")
         print("6) Dexacted")
-        print("7) Settings")
-        print("8) Quit")
+        print("7) Movepool Madness")
+        print("8) Settings")
+        print("9) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku(settings)
@@ -391,9 +452,11 @@ def main() -> None:
         elif choice == "6":
             run_dexacted(settings)
         elif choice == "7":
+            run_movepool_madness(settings)
+        elif choice == "8":
             settings = _settings_menu()
             print(f"Updated settings: {_settings_summary(settings)}")
-        elif choice == "8":
+        elif choice == "9":
             break
         else:
             print("Unknown choice.")
