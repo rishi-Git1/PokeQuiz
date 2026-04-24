@@ -4,6 +4,9 @@ import random
 
 from pokequiz.data import load_dex
 from pokequiz.games.ability_assessor import ability_profile_for_name, display_ability_name, profile_matches
+from pokequiz.games.category_quiz import clue_lines as category_clue_lines
+from pokequiz.games.category_quiz import matches_on_shown_clues as category_matches_on_shown_clues
+from pokequiz.games.category_quiz import profile_for_name as category_profile_for_name
 from pokequiz.games.daycare_detective import daycare_profile_for_name, gender_rate_label
 from pokequiz.games.defensive_profile import defensive_types_for_name, grouped_multiplier_clues
 from pokequiz.games.dexacted import dex_entries_for_name
@@ -1020,6 +1023,98 @@ def run_odd_one_out(settings: GameSettings) -> None:
     print(f"Out of guesses. Odd one was {odd_name}. Shared trait was {challenge.trait_explanation}.")
 
 
+def run_category_quiz(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    target = random.choice(pool)
+    try:
+        target_profile = category_profile_for_name(target.name)
+    except Exception:
+        print("Could not load category/species data right now (API issue).")
+        return
+
+    clue_map = {
+        "color": f"Color: {target_profile.color}" if target_profile.color else None,
+        "egg_groups": f"Egg Groups: {', '.join(target_profile.egg_groups)}" if target_profile.egg_groups else None,
+        "types": f"Type(s): {', '.join(target_profile.types)}" if target_profile.types else None,
+        "generation": f"Generation: {target_profile.generation}" if target_profile.generation is not None else None,
+        "primary_ability": f"Primary Ability: {target_profile.primary_ability}" if target_profile.primary_ability else None,
+        "capture_rate_band": f"Capture Rate Band: {target_profile.capture_rate_band}" if target_profile.capture_rate_band else None,
+        "weight_band": f"Weight Class: {target_profile.weight_band}" if target_profile.weight_band else None,
+        "height_band": f"Height Class: {target_profile.height_band}" if target_profile.height_band else None,
+        "starts_with": f"Name starts with: {target_profile.starts_with.upper()}",
+        "ends_with": f"Name ends with: {target_profile.ends_with.upper()}",
+    }
+    revealable_fields = [k for k, v in clue_map.items() if v]
+    random.shuffle(revealable_fields)
+    shown_fields: set[str] = {"category"}
+    shown_clues = [f'Category: "{target_profile.category}"']
+
+    max_guesses = _input_guess_count("How many guesses for Category Quiz?", 5)
+    print("Category Quiz: guess a Pokémon from category/species clues.")
+    print("Category is always shown. Use 'clue' to pick additional clues manually.")
+    print(f"Clue 1: {shown_clues[0]}")
+
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Category Quiz. One matching answer was {target.name}.")
+            return
+        if raw.casefold() in {"clue", "c", "hint"}:
+            remaining = [f for f in revealable_fields if f not in shown_fields]
+            if not remaining:
+                print("No more clues available.")
+                continue
+            print("Choose a clue to reveal:")
+            for idx, field in enumerate(remaining, start=1):
+                print(f"{idx}) {field.replace('_', ' ')}")
+            pick = input("> ").strip()
+            if not pick.isdigit() or not (1 <= int(pick) <= len(remaining)):
+                print("Invalid clue selection.")
+                continue
+            chosen = remaining[int(pick) - 1]
+            shown_fields.add(chosen)
+            shown_clues.append(str(clue_map[chosen]))
+            print(f"Clue {len(shown_clues)}: {clue_map[chosen]}")
+            continue
+
+        guess = dex.by_name(raw)
+        if not guess:
+            print(f'Unknown Pokémon: "{raw}"')
+            continue
+        if not settings.accepts(guess):
+            print("That Pokémon is outside your current generation/variant filters.")
+            continue
+        if guess.name in seen_guesses:
+            print(f'You already guessed "{guess.name}". Try a different Pokémon.')
+            continue
+        seen_guesses.add(guess.name)
+
+        try:
+            g_profile = category_profile_for_name(guess.name)
+        except Exception:
+            print("Could not validate that guess right now (API issue). Try again.")
+            continue
+
+        if category_matches_on_shown_clues(g_profile, target_profile, shown_fields):
+            print(f"Correct! {guess.name} fits the shown Category Quiz clues.")
+            return
+
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. One matching answer was {target.name}.")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -1042,6 +1137,7 @@ def main() -> None:
         print("13) Safari Zone")
         print("14) Thief's Target")
         print("15) Ugly Ducklett")
+        print("16) Category Quiz")
         choice = input("> ").strip()
         cmd = choice.casefold()
         if cmd in {"settings", "s"}:
@@ -1080,6 +1176,8 @@ def main() -> None:
             run_thiefs_target(settings)
         elif choice == "15":
             run_odd_one_out(settings)
+        elif choice == "16":
+            run_category_quiz(settings)
         else:
             print("Unknown choice.")
 
