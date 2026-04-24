@@ -18,6 +18,7 @@ _input_hook_installed = False
 _select_sound = None  # pygame.mixer.Sound | None
 _completion_sound = None  # pygame.mixer.Sound | None
 _low_health_sound = None  # pygame.mixer.Sound | None
+_shiny_jingle_sound = None  # pygame.mixer.Sound | None
 
 _mute_bgm = False
 _mute_input_sfx = False
@@ -62,6 +63,24 @@ def _default_low_health_paths() -> list[Path]:
         base / "low_health.wav",
         base / "low_health.ogg",
         base / "low_health.mp3",
+    ]
+
+
+def _default_loser_bgm_paths() -> list[Path]:
+    base = _assets_dir()
+    return [
+        base / "loser.ogg",
+        base / "loser.mp3",
+        base / "loser.wav",
+    ]
+
+
+def _default_shiny_jingle_paths() -> list[Path]:
+    base = _assets_dir()
+    return [
+        base / "shiny_jingle.wav",
+        base / "shiny_jingle.ogg",
+        base / "shiny_jingle.mp3",
     ]
 
 
@@ -113,6 +132,30 @@ def resolve_low_health_sound() -> Path | None:
     return None
 
 
+def resolve_loser_bgm_file() -> Path | None:
+    env = (os.environ.get("POKEQUIZ_LOSER_BGM") or "").strip()
+    if env:
+        p = Path(env).expanduser()
+        if p.is_file():
+            return p
+    for candidate in _default_loser_bgm_paths():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def resolve_shiny_jingle_sound() -> Path | None:
+    env = (os.environ.get("POKEQUIZ_SHINY_JINGLE_SFX") or "").strip()
+    if env:
+        p = Path(env).expanduser()
+        if p.is_file():
+            return p
+    for candidate in _default_shiny_jingle_paths():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _bgm_volume() -> float:
     raw = (os.environ.get("POKEQUIZ_BGM_VOLUME") or "0.35").strip()
     try:
@@ -146,6 +189,15 @@ def _low_health_volume() -> float:
         v = float(raw)
     except ValueError:
         return 0.7
+    return max(0.0, min(1.0, v))
+
+
+def _shiny_jingle_volume() -> float:
+    raw = (os.environ.get("POKEQUIZ_SHINY_JINGLE_VOLUME") or "0.85").strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        return 0.85
     return max(0.0, min(1.0, v))
 
 
@@ -200,7 +252,7 @@ def _play_loop(path: Path) -> None:
 
 
 def start_if_configured() -> None:
-    global _thread
+    """Start looping menu BGM if a menu track exists (initial startup only)."""
     if _mute_bgm:
         return
     if _thread is not None and _thread.is_alive():
@@ -218,9 +270,8 @@ def start_if_configured() -> None:
         return
     if not ensure_mixer():
         return
-    _stop.clear()
-    _thread = threading.Thread(target=_play_loop, args=(path,), name="pokequiz-bgm", daemon=True)
-    _thread.start()
+    stop()
+    _spawn_bgm_thread(path)
 
 
 def stop() -> None:
@@ -229,6 +280,49 @@ def stop() -> None:
     if _thread is not None:
         _thread.join(timeout=3.0)
         _thread = None
+    _stop.clear()
+
+
+def _spawn_bgm_thread(path: Path) -> None:
+    global _thread
+    _stop.clear()
+    _thread = threading.Thread(target=_play_loop, args=(path,), name="pokequiz-bgm", daemon=True)
+    _thread.start()
+
+
+def switch_to_menu_bgm() -> None:
+    """Loop menu theme (Littleroot). Call after a win when returning to the hub."""
+    if _mute_bgm:
+        return
+    path = resolve_bgm_file()
+    if path is None:
+        stop()
+        return
+    try:
+        _import_pygame()
+    except ImportError:
+        return
+    if not ensure_mixer():
+        return
+    stop()
+    _spawn_bgm_thread(path)
+
+
+def switch_to_loser_bgm() -> None:
+    """Replace menu BGM with the loser theme after a loss or quitting a mode."""
+    if _mute_bgm:
+        return
+    path = resolve_loser_bgm_file()
+    try:
+        _import_pygame()
+    except ImportError:
+        return
+    if not ensure_mixer():
+        return
+    stop()
+    if path is None:
+        return
+    _spawn_bgm_thread(path)
 
 
 def _load_select_sound():
@@ -329,6 +423,37 @@ def play_low_health_sound() -> None:
         pass
 
 
+def _load_shiny_jingle_sound() -> None:
+    global _shiny_jingle_sound
+    if _shiny_jingle_sound is not None:
+        return
+    path = resolve_shiny_jingle_sound()
+    if path is None:
+        return
+    pygame = _import_pygame()
+    try:
+        snd = pygame.mixer.Sound(str(path))
+        snd.set_volume(_shiny_jingle_volume())
+        _shiny_jingle_sound = snd
+    except Exception:
+        _shiny_jingle_sound = None
+
+
+def play_shiny_jingle() -> None:
+    """Rare startup splash: play when the random-color shiny-style main menu is active."""
+    if resolve_shiny_jingle_sound() is None:
+        return
+    if not ensure_mixer():
+        return
+    _load_shiny_jingle_sound()
+    if _shiny_jingle_sound is None:
+        return
+    try:
+        _shiny_jingle_sound.play()
+    except Exception:
+        pass
+
+
 def _input_with_select_sound(prompt: str = "") -> str:
     line = _original_input(prompt)
     play_pokedex_select_sound()
@@ -361,7 +486,16 @@ def setup_terminal_audio() -> None:
     want_sfx = resolve_pokedex_select_sound() is not None
     want_completion = resolve_completion_sound() is not None
     want_low_health = resolve_low_health_sound() is not None
-    if not want_bgm and not want_sfx and not want_completion and not want_low_health:
+    want_shiny_jingle = resolve_shiny_jingle_sound() is not None
+    want_loser_bgm = resolve_loser_bgm_file() is not None
+    if (
+        not want_bgm
+        and not want_sfx
+        and not want_completion
+        and not want_low_health
+        and not want_shiny_jingle
+        and not want_loser_bgm
+    ):
         return
     try:
         _import_pygame()
@@ -386,6 +520,16 @@ def setup_terminal_audio() -> None:
                 "Tip: for last-guess warning, `pip install pygame` and place low_health.wav/ogg/mp3 "
                 "in pokequiz/assets/ (or set POKEQUIZ_LOW_HEALTH_SFX)."
             )
+        if want_shiny_jingle:
+            print(
+                "Tip: for shiny menu jingle, `pip install pygame` and place shiny_jingle.wav/ogg/mp3 "
+                "in pokequiz/assets/ (or set POKEQUIZ_SHINY_JINGLE_SFX)."
+            )
+        if want_loser_bgm:
+            print(
+                "Tip: for post-loss menu music, `pip install pygame` and place loser.ogg/mp3/wav "
+                "in pokequiz/assets/ (or set POKEQUIZ_LOSER_BGM)."
+            )
         return
     if not ensure_mixer():
         return
@@ -393,7 +537,7 @@ def setup_terminal_audio() -> None:
 
 
 def shutdown_terminal_audio() -> None:
-    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound, _low_health_sound
+    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound, _low_health_sound, _shiny_jingle_sound
     if _input_hook_installed:
         builtins.input = _original_input
         _input_hook_installed = False
@@ -401,6 +545,7 @@ def shutdown_terminal_audio() -> None:
     _select_sound = None
     _completion_sound = None
     _low_health_sound = None
+    _shiny_jingle_sound = None
     if _mixer_ready:
         try:
             pygame = _import_pygame()

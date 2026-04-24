@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+from typing import Any, Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
@@ -56,6 +57,9 @@ from pokequiz.models import GameSettings, Pokemon
 
 LAST_STAT_QUIZ: str | None = None
 _TYPE_COLOR_PATCHED = False
+_PLAIN_TERMINAL_PRINT: Callable[..., None] = builtins.print
+
+_MENU_RESET = "\x1b[0m"
 
 # When False, patched print skips type coloring and _color_move_name returns plain text.
 # Use in modes whose strings are locations, dex flavor, items, etc. (not type/move trivia).
@@ -133,11 +137,12 @@ def _color_move_name(move_display_name: str, *, move_slug: str | None = None) ->
 
 
 def _enable_type_color_output() -> None:
-    global _TYPE_COLOR_PATCHED
+    global _TYPE_COLOR_PATCHED, _PLAIN_TERMINAL_PRINT
     if _TYPE_COLOR_PATCHED:
         return
 
     original_print = builtins.print
+    _PLAIN_TERMINAL_PRINT = original_print
 
     def color_print(*args, **kwargs):  # type: ignore[no-untyped-def]
         sep = kwargs.get("sep", " ")
@@ -278,7 +283,18 @@ def _last_guess_warning(turn: int, max_guesses: int) -> None:
         bgm.play_low_health_sound()
 
 
-def run_pokedoku(settings: GameSettings) -> None:
+def _main_menu_print(active: bool, fg_ansi: str, *args: object, **kwargs: Any) -> None:
+    """Main menu lines; optional shiny-style random color (bypasses type-color print patch)."""
+    if not active:
+        print(*args, **kwargs)
+        return
+    wrapped: list[object] = []
+    for a in args:
+        wrapped.append(fg_ansi + (a if isinstance(a, str) else str(a)) + _MENU_RESET)
+    _PLAIN_TERMINAL_PRINT(*wrapped, **kwargs)
+
+
+def run_pokedoku(settings: GameSettings) -> bool | None:
     dex = load_dex()
     custom = _input_bool("Build a custom Pokedoku grid?", False)
     if custom:
@@ -292,7 +308,7 @@ def run_pokedoku(settings: GameSettings) -> None:
             row_constraints, col_constraints = random_constraints(dex, settings)
         except ValueError as err:
             print(err)
-            return
+            return None
 
     answers: list[list[str]] = [["" for _ in range(3)] for _ in range(3)]
 
@@ -314,7 +330,7 @@ def run_pokedoku(settings: GameSettings) -> None:
             continue
         if low0 in ("quit", "q", "exit"):
             print("Leaving Pokedoku.")
-            return
+            return False
         if low0 == "done":
             break
         if low0 in ("clear", "c", "x") and len(parts) >= 3:
@@ -356,9 +372,11 @@ def run_pokedoku(settings: GameSettings) -> None:
         print(warning)
     if score == 9:
         bgm.play_completion_sound()
+        return True
+    return False
 
 
-def run_squirdle(settings: GameSettings) -> None:
+def run_squirdle(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     max_guesses = _input_guess_count("How many guesses for Squirdle?", 8)
@@ -374,7 +392,7 @@ def run_squirdle(settings: GameSettings) -> None:
                 continue
             if guess_name.casefold() in {"quit", "q", "exit"}:
                 print(f"Leaving Squirdle. Target was {target.name}.")
-                return
+                return False
             guess = dex.by_name(guess_name)
             if not guess:
                 print(f'Unknown Pokémon: "{guess_name}"')
@@ -390,20 +408,21 @@ def run_squirdle(settings: GameSettings) -> None:
         if guess.name == target.name:
             print("Correct!")
             bgm.play_completion_sound()
-            return
+            return True
         feedback = compare_guess(target, guess)
         print(format_squirdle_feedback(feedback))
     print(f"Out of guesses. Target was {target.name}.")
+    return False
 
 
-def run_stat_quiz(settings: GameSettings) -> None:
+def run_stat_quiz(settings: GameSettings) -> bool | None:
     global LAST_STAT_QUIZ
 
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     mon = random.choice(pool)
     if LAST_STAT_QUIZ and len(pool) > 1 and mon.name == LAST_STAT_QUIZ:
@@ -425,7 +444,7 @@ def run_stat_quiz(settings: GameSettings) -> None:
                 continue
             if guess.casefold() in {"quit", "q", "exit"}:
                 print(f"Leaving Pokedentities. It was {mon.name}.")
-                return
+                return False
             guessed_mon = dex.by_name(guess)
             if not guessed_mon:
                 print(f'Unknown Pokémon: "{guess}"')
@@ -438,18 +457,19 @@ def run_stat_quiz(settings: GameSettings) -> None:
         if is_correct_guess(mon, guess):
             print("Correct!")
             bgm.play_completion_sound()
-            return
+            return True
         if hint_turn is not None and tries == hint_turn:
             print(f"Hint: types={','.join(mon.types)} generation={mon.generation}")
     print(f"Nope. It was {mon.name}.")
+    return False
 
 
-def run_whos_that_pokemon(settings: GameSettings) -> None:
+def run_whos_that_pokemon(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Who's that Pokemon!?", 3)
     target = random.choice(pool)
@@ -466,7 +486,7 @@ def run_whos_that_pokemon(settings: GameSettings) -> None:
                 continue
             if guess_name.casefold() in {"quit", "q", "exit"}:
                 print(f"Leaving Who's that Pokemon!?. It was {target.name}.")
-                return
+                return False
             guess = dex.by_name(guess_name)
             if not guess:
                 print(f'Unknown Pokémon: "{guess_name}"')
@@ -479,18 +499,19 @@ def run_whos_that_pokemon(settings: GameSettings) -> None:
         if guess.name == target.name:
             print("Correct!")
             bgm.play_completion_sound()
-            return
+            return True
         print("Nope, try again.")
 
     print(f"Out of guesses. It was {target.name}.")
+    return False
 
 
-def run_statle(settings: GameSettings) -> None:
+def run_statle(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     picked_stats: list[str] = []
     results = []
@@ -516,7 +537,7 @@ def run_statle(settings: GameSettings) -> None:
                 continue
             if raw_pick.casefold() in {"quit", "q", "exit"}:
                 print("Leaving Statle.")
-                return
+                return False
             if raw_pick.isdigit() and 1 <= int(raw_pick) <= len(available):
                 stat = available[int(raw_pick) - 1]
                 break
@@ -536,20 +557,21 @@ def run_statle(settings: GameSettings) -> None:
     print(f"\nFinal total: {final}")
     optimal_total, plan = optimal_statle_assignment(round_mons)
     print(format_optimal_statle_summary(round_mons, plan, optimal_total, your_total=final))
+    return True
 
 
-def run_dexacted(settings: GameSettings) -> None:
+def run_dexacted(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     target = random.choice(pool)
     entries = list(dex_entries_for_name(target.name))
     if not entries:
         print("No dex entries available for that Pokémon right now. Try another round.")
-        return
+        return None
     random.shuffle(entries)
 
     with _plain_game_output():
@@ -566,7 +588,7 @@ def run_dexacted(settings: GameSettings) -> None:
             command = raw.casefold()
             if command in {"quit", "q", "exit"}:
                 print(f"Leaving Dexacted. The answer was {target.name}.")
-                return
+                return False
             if command in {"entry", "e", "next", "hint"}:
                 if revealed >= len(entries):
                     print("No more dex entries available.")
@@ -582,25 +604,25 @@ def run_dexacted(settings: GameSettings) -> None:
             if guess.name == target.name:
                 print("Correct!")
                 bgm.play_completion_sound()
-                return
+                return True
             if revealed >= len(entries):
                 print(f"Wrong guess and no entries left. You lose. It was {target.name}.")
-                return
+                return False
             print("Nope. Ask for another entry or guess again.")
 
 
-def run_movepool_madness(settings: GameSettings) -> None:
+def run_movepool_madness(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     try:
         target, required_moves = build_challenge(pool)
     except ValueError as err:
         print(err)
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Movepool Madness?", 5)
     print("Movepool Madness: name any Pokémon that can legally learn ALL four moves.")
@@ -618,7 +640,7 @@ def run_movepool_madness(settings: GameSettings) -> None:
             continue
         if raw.casefold() in {"quit", "q", "exit"}:
             print(f"Leaving Movepool Madness. One valid answer was {target.name}.")
-            return
+            return False
 
         guess = dex.by_name(raw)
         if not guess:
@@ -636,7 +658,7 @@ def run_movepool_madness(settings: GameSettings) -> None:
             if guess_satisfies_moves(guess.name, required_moves):
                 print(f"Correct! {guess.name} can learn all four.")
                 bgm.play_completion_sound()
-                return
+                return True
             learned = set(legal_moves_for_name(guess.name))
             missing = [_color_move_name(display_move_name(m), move_slug=m) for m in required_moves if m not in learned]
             if missing:
@@ -648,21 +670,22 @@ def run_movepool_madness(settings: GameSettings) -> None:
             print("Could not validate that guess right now (API issue). Try again.")
 
     print(f"Out of guesses. One valid answer was {target.name}.")
+    return False
 
 
-def run_daycare_detective(settings: GameSettings) -> None:
+def run_daycare_detective(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     target = random.choice(pool)
     try:
         profile = daycare_profile_for_name(target.name)
     except Exception:
         print("Could not load daycare profile data right now (API issue).")
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Daycare Detective?", 5)
     with _plain_game_output():
@@ -682,7 +705,7 @@ def run_daycare_detective(settings: GameSettings) -> None:
                 continue
             if raw.casefold() in {"quit", "q", "exit"}:
                 print(f"Leaving Daycare Detective. The answer was {target.name}.")
-                return
+                return False
 
             guess = dex.by_name(raw)
             if not guess:
@@ -699,25 +722,26 @@ def run_daycare_detective(settings: GameSettings) -> None:
             if guess.name == target.name:
                 print("Correct!")
                 bgm.play_completion_sound()
-                return
+                return True
             print("Nope.")
             turn += 1
 
         print(f"Out of guesses. It was {target.name}.")
+        return False
 
 
-def run_evolutionary_enigma(settings: GameSettings) -> None:
+def run_evolutionary_enigma(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     try:
         edge, clues = build_evolution_enigma_challenge([p.name for p in pool])
     except ValueError as err:
         print(err)
-        return
+        return None
     signature = evolution_details_signature(edge.details)
 
     max_guesses = _input_guess_count("How many guesses for Evolutionary Enigma?", 5)
@@ -739,7 +763,7 @@ def run_evolutionary_enigma(settings: GameSettings) -> None:
             cmd = raw.casefold()
             if cmd in {"quit", "q", "exit"}:
                 print(f"Leaving Evolutionary Enigma. This clue profile included {edge.from_name} -> {edge.to_name}.")
-                return
+                return False
             if cmd in {"clue", "c", "hint"}:
                 if revealed >= len(clues):
                     print("No more clues to reveal.")
@@ -763,27 +787,28 @@ def run_evolutionary_enigma(settings: GameSettings) -> None:
             if guess_matches_signature(guess.name, signature):
                 print(f"Correct! This clue describes {edge.from_name} evolving into {edge.to_name}.")
                 bgm.play_completion_sound()
-                return
+                return True
 
             print("Nope.")
             turn += 1
 
         print(f"Out of guesses. This clue profile included {edge.from_name} -> {edge.to_name}.")
+        return False
 
 
-def run_ability_assessor(settings: GameSettings) -> None:
+def run_ability_assessor(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     target = random.choice(pool)
     try:
         profile = ability_profile_for_name(target.name)
     except Exception:
         print("Could not load ability data right now (API issue).")
-        return
+        return None
 
     # Build clue set from available abilities only, then reveal one-by-one.
     clues: list[str] = []
@@ -795,7 +820,7 @@ def run_ability_assessor(settings: GameSettings) -> None:
         clues.append(f"Ability 2: {display_ability_name(profile.ability_2)}")
     if not clues:
         print("This Pokémon has no usable ability profile for this mode. Try again.")
-        return
+        return None
     random.shuffle(clues)
 
     max_guesses = _input_guess_count("How many guesses for Ability Assessor?", 5)
@@ -818,7 +843,7 @@ def run_ability_assessor(settings: GameSettings) -> None:
                 "Leaving Ability Assessor. One matching profile was: "
                 f"{target.name} ({', '.join(clues)})."
             )
-            return
+            return False
         if cmd in {"clue", "c", "hint"}:
             if revealed >= len(clues):
                 print("No more clues to reveal.")
@@ -853,20 +878,21 @@ def run_ability_assessor(settings: GameSettings) -> None:
         ):
             print(f"Correct! {guess.name} matches this ability profile.")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
 
     print(f"Out of guesses. One matching profile was {target.name}.")
+    return False
 
 
-def run_level_ladder(settings: GameSettings) -> None:
+def run_level_ladder(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     # Find a target that has enough level-up moves to make clue progression meaningful.
     candidates = pool[:]
@@ -884,7 +910,7 @@ def run_level_ladder(settings: GameSettings) -> None:
             break
     if target is None:
         print("Could not find enough level-up learnset data for this filter set.")
-        return
+        return None
 
     reverse_mode = _input_bool("Use reverse mode (show highest-level moves first)?", False)
     ordered = list(reversed(moves)) if reverse_mode else moves
@@ -907,7 +933,7 @@ def run_level_ladder(settings: GameSettings) -> None:
         cmd = raw.casefold()
         if cmd in {"quit", "q", "exit"}:
             print(f"Leaving Level Ladder. The answer was {target.name}.")
-            return
+            return False
         if cmd in {"clue", "c", "hint"}:
             if revealed >= len(clues):
                 print("No more hints to reveal.")
@@ -939,24 +965,25 @@ def run_level_ladder(settings: GameSettings) -> None:
         if len(guess_revealed) == len(target_revealed) and guess_revealed == target_revealed:
             print(f"Correct! {guess.name} matches the revealed Level Ladder sequence.")
             bgm.play_completion_sound()
-            return
+            return True
         print("Nope.")
         turn += 1
 
     print(f"Out of guesses. It was {target.name}.")
+    return False
 
 
-def run_defensive_profile(settings: GameSettings) -> None:
+def run_defensive_profile(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     dual_type_pool = [p for p in pool if len(p.types) >= 2]
     if not dual_type_pool:
         print("No dual-type Pokémon match your current filters for Defensive Profile.")
-        return
+        return None
 
     target = random.choice(dual_type_pool)
     try:
@@ -964,11 +991,11 @@ def run_defensive_profile(settings: GameSettings) -> None:
         clues = grouped_multiplier_clues(target_types)
     except Exception:
         print("Could not load type-defense data right now (API issue).")
-        return
+        return None
 
     if not clues:
         print("No defensive clue data was available for this target. Try another round.")
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Defensive Profile?", 5)
     print("Defensive Profile: guess a Pokémon that matches this defensive profile.")
@@ -990,7 +1017,7 @@ def run_defensive_profile(settings: GameSettings) -> None:
                 f"One matching type combo was {'/'.join(t.title() for t in target_types)} "
                 f"(example: {target.name})."
             )
-            return
+            return False
 
         guess = dex.by_name(raw)
         if not guess:
@@ -1013,7 +1040,7 @@ def run_defensive_profile(settings: GameSettings) -> None:
         if g_types == target_types:
             print(f"Correct! {guess.name} matches this defensive profile.")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
@@ -1023,14 +1050,15 @@ def run_defensive_profile(settings: GameSettings) -> None:
         f"One matching type combo was {'/'.join(t.title() for t in target_types)} "
         f"(example: {target.name})."
     )
+    return False
 
 
-def run_safari_zone(settings: GameSettings) -> None:
+def run_safari_zone(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     candidates = pool[:]
     random.shuffle(candidates)
@@ -1047,7 +1075,7 @@ def run_safari_zone(settings: GameSettings) -> None:
             break
     if target is None:
         print("Could not find encounter/location clue data for this filter set.")
-        return
+        return None
 
     random.shuffle(target_clues)
     max_guesses = _input_guess_count("How many guesses for Safari Zone?", 5)
@@ -1069,7 +1097,7 @@ def run_safari_zone(settings: GameSettings) -> None:
             cmd = raw.casefold()
             if cmd in {"quit", "q", "exit"}:
                 print(f"Leaving Safari Zone. One matching answer was {target.name}.")
-                return
+                return False
             if cmd in {"clue", "c", "hint"}:
                 if revealed >= len(target_clues):
                     print("No more clues to reveal.")
@@ -1100,20 +1128,21 @@ def run_safari_zone(settings: GameSettings) -> None:
             if revealed_set.issubset(guess_clues):
                 print(f"Correct! {guess.name} matches the revealed Safari Zone clues.")
                 bgm.play_completion_sound()
-                return
+                return True
 
             print("Nope.")
             turn += 1
 
         print(f"Out of guesses. One matching answer was {target.name}.")
+        return False
 
 
-def run_thiefs_target(settings: GameSettings) -> None:
+def run_thiefs_target(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     candidates = pool[:]
     random.shuffle(candidates)
@@ -1130,7 +1159,7 @@ def run_thiefs_target(settings: GameSettings) -> None:
             break
     if target is None:
         print("Could not find held-item data for this filter set.")
-        return
+        return None
 
     clues = thief_profile_clues(profile)
     max_guesses = _input_guess_count("How many guesses for Thief's Target?", 5)
@@ -1150,7 +1179,7 @@ def run_thiefs_target(settings: GameSettings) -> None:
                 continue
             if raw.casefold() in {"quit", "q", "exit"}:
                 print(f"Leaving Thief's Target. One matching answer was {target.name}.")
-                return
+                return False
 
             guess = dex.by_name(raw)
             if not guess:
@@ -1172,20 +1201,21 @@ def run_thiefs_target(settings: GameSettings) -> None:
             if guess_profile == profile:
                 print(f"Correct! {guess.name} matches this held-item profile.")
                 bgm.play_completion_sound()
-                return
+                return True
 
             print("Nope.")
             turn += 1
 
         print(f"Out of guesses. One matching answer was {target.name}.")
+        return False
 
 
-def run_odd_one_out(settings: GameSettings) -> None:
+def run_odd_one_out(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if len(pool) < 3:
         print("Not enough Pokémon in current filter for Ugly Ducklett.")
-        return
+        return None
 
     while True:
         raw_count = input("How many Pokémon in this round? (min 3, max 8, default 4): ").strip()
@@ -1202,7 +1232,7 @@ def run_odd_one_out(settings: GameSettings) -> None:
         challenge = build_odd_one_out_challenge(pool, total_choices=total_choices)
     except ValueError as err:
         print(err)
-        return
+        return None
 
     print("Ugly Ducklett: exactly one Pokémon does NOT share the hidden trait.")
     print("Pick by number or by Pokémon name. Commands: quit")
@@ -1220,7 +1250,7 @@ def run_odd_one_out(settings: GameSettings) -> None:
         if raw.casefold() in {"quit", "q", "exit"}:
             odd_name = challenge.names[challenge.odd_index]
             print(f"Leaving Ugly Ducklett. Odd one was {odd_name}. Shared trait was {challenge.trait_explanation}.")
-            return
+            return False
 
         picked_index: int | None = None
         if raw.isdigit():
@@ -1250,28 +1280,29 @@ def run_odd_one_out(settings: GameSettings) -> None:
             odd_name = challenge.names[challenge.odd_index]
             print(f"Correct! Odd one was {odd_name}. The others shared: {challenge.trait_explanation}.")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
 
     odd_name = challenge.names[challenge.odd_index]
     print(f"Out of guesses. Odd one was {odd_name}. Shared trait was {challenge.trait_explanation}.")
+    return False
 
 
-def run_category_quiz(settings: GameSettings) -> None:
+def run_category_quiz(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     target = random.choice(pool)
     try:
         target_profile = category_profile_for_name(target.name)
     except Exception:
         print("Could not load category/species data right now (API issue).")
-        return
+        return None
 
     clue_map = {
         "color": f"Color: {target_profile.color}" if target_profile.color else None,
@@ -1305,7 +1336,7 @@ def run_category_quiz(settings: GameSettings) -> None:
             continue
         if raw.casefold() in {"quit", "q", "exit"}:
             print(f"Leaving Category Quiz. One matching answer was {target.name}.")
-            return
+            return False
         if raw.casefold() in {"clue", "c", "hint"}:
             remaining = [f for f in revealable_fields if f not in shown_fields]
             if not remaining:
@@ -1345,20 +1376,21 @@ def run_category_quiz(settings: GameSettings) -> None:
         if category_matches_on_shown_clues(g_profile, target_profile, shown_fields):
             print(f"Correct! {guess.name} fits the shown Category Quiz clues.")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
 
     print(f"Out of guesses. One matching answer was {target.name}.")
+    return False
 
 
-def run_stat_sorter(settings: GameSettings) -> None:
+def run_stat_sorter(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if len(pool) < 3:
         print("Not enough Pokémon in current filter for Stat Sorter.")
-        return
+        return None
 
     max_size = min(8, len(pool))
     while True:
@@ -1404,7 +1436,7 @@ def run_stat_sorter(settings: GameSettings) -> None:
         if raw.casefold() in {"quit", "q", "exit"}:
             pretty = " -> ".join(f"{m.name} ({getattr(m, stat_key)})" for m in correct_sorted)
             print(f"Leaving Stat Sorter. Correct order was: {pretty}")
-            return
+            return False
 
         parts = [p for p in raw.replace(",", " ").split() if p]
         if len(parts) != len(mons):
@@ -1451,21 +1483,22 @@ def run_stat_sorter(settings: GameSettings) -> None:
                 pretty = " -> ".join(f"{n} ({getattr(dex.by_name(n), stat_key)})" for n in chosen_names)  # type: ignore[arg-type]
                 print(f"Correct! {pretty}")
                 bgm.play_completion_sound()
-                return
+                return True
 
         print("Nope.")
         turn += 1
 
     pretty = " -> ".join(f"{m.name} ({getattr(m, stat_key)})" for m in correct_sorted)
     print(f"Out of guesses. Correct order was: {pretty}")
+    return False
 
 
-def run_level_race(settings: GameSettings) -> None:
+def run_level_race(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if len(pool) < 2:
         print("Not enough Pokémon in current filter for Level Race.")
-        return
+        return None
 
     max_options = min(5, len(pool))
     while True:
@@ -1482,7 +1515,7 @@ def run_level_race(settings: GameSettings) -> None:
         move_name, options = build_level_race_challenge(pool, option_count=option_count)
     except ValueError as err:
         print(err)
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Level Race?", 3)
     print("Level Race (Move Learnsets): order these Pokémon by learn level (lowest to highest).")
@@ -1506,7 +1539,7 @@ def run_level_race(settings: GameSettings) -> None:
         if raw.casefold() in {"quit", "q", "exit"}:
             details = " -> ".join(f"{m.name} (L{lvl})" for m, lvl in correct_sorted)
             print(f"Leaving Level Race. Correct order was: {details}")
-            return
+            return False
 
         parts = [p for p in raw.replace(",", " ").split() if p]
         if len(parts) != len(options):
@@ -1554,32 +1587,33 @@ def run_level_race(settings: GameSettings) -> None:
                 details = " -> ".join(f"{n} (L{lookup[n]})" for n in chosen_names)
                 print(f"Correct! {details}")
                 bgm.play_completion_sound()
-                return
+                return True
 
         print("Nope.")
         turn += 1
 
     details = " -> ".join(f"{m.name} (L{lvl})" for m, lvl in correct_sorted)
     print(f"Out of guesses. Correct order was: {details}")
+    return False
 
 
-def run_missing_link(settings: GameSettings) -> None:
+def run_missing_link(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if len(pool) < 1:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     try:
         mon, moves, missing_idx, missing_move = build_missing_link_challenge(pool)
     except ValueError as err:
         print(err)
-        return
+        return None
 
     info = missing_link_move_info(missing_move)
     if info is None:
         print("Could not load move clue data right now (API issue).")
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for Missing Link?", 4)
     print("Missing Link: one level-up move is redacted. Guess the missing move.")
@@ -1606,7 +1640,7 @@ def run_missing_link(settings: GameSettings) -> None:
                 "Leaving Missing Link. The move was "
                 f"{_color_move_name(display_level_move_name(missing_move), move_slug=missing_move)}."
             )
-            return
+            return False
         if cmd in {"clue", "c", "hint"}:
             if clue_stage == 0:
                 print(f"Clue 1: Move type is {info['type']}.")
@@ -1639,7 +1673,7 @@ def run_missing_link(settings: GameSettings) -> None:
         if guess_slug == missing_move:
             print("Correct!")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
@@ -1648,14 +1682,15 @@ def run_missing_link(settings: GameSettings) -> None:
         "Out of guesses. The move was "
         f"{_color_move_name(display_level_move_name(missing_move), move_slug=missing_move)}."
     )
+    return False
 
 
-def run_ev_forensic(settings: GameSettings) -> None:
+def run_ev_forensic(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     # Pick a target that actually yields EVs for meaningful core clue.
     candidates = pool[:]
@@ -1673,7 +1708,7 @@ def run_ev_forensic(settings: GameSettings) -> None:
             break
     if target is None or target_profile is None:
         print("Could not find EV-yield data for this filter set.")
-        return
+        return None
 
     clue_map = {
         "generation": f"Generation: {target_profile.generation}" if target_profile.generation is not None else None,
@@ -1702,7 +1737,7 @@ def run_ev_forensic(settings: GameSettings) -> None:
         cmd = raw.casefold()
         if cmd in {"quit", "q", "exit"}:
             print(f"Leaving EV Forensic. One matching answer was {target.name}.")
-            return
+            return False
         if cmd in {"clue", "c", "hint"}:
             remaining = [k for k, v in clue_map.items() if v and k not in shown_fields]
             if not remaining:
@@ -1758,20 +1793,21 @@ def run_ev_forensic(settings: GameSettings) -> None:
         if ok:
             print(f"Correct! {guess.name} fits the shown EV Forensic profile.")
             bgm.play_completion_sound()
-            return
+            return True
 
         print("Nope.")
         turn += 1
 
     print(f"Out of guesses. One matching answer was {target.name}.")
+    return False
 
 
-def run_international_names(settings: GameSettings) -> None:
+def run_international_names(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
-        return
+        return None
 
     candidates = pool[:]
     random.shuffle(candidates)
@@ -1792,13 +1828,13 @@ def run_international_names(settings: GameSettings) -> None:
             "Could not find a species with a PokéAPI ja-roma (romanized Japanese) name "
             "in the current filter. Try again or widen filters."
         )
-        return
+        return None
 
     try:
         name_map = names_by_language(target.name)
     except Exception:
         print("Could not load species name data right now (API issue).")
-        return
+        return None
 
     max_guesses = _input_guess_count("How many guesses for International Names?", 5)
     optional_labels = ", ".join(label for _, label in CLUE_LANGUAGES)
@@ -1821,7 +1857,7 @@ def run_international_names(settings: GameSettings) -> None:
             cmd = raw.casefold()
             if cmd in {"quit", "q", "exit"}:
                 print(f"Leaving International Names. The English name was {target.name}.")
-                return
+                return False
             if cmd in {"clue", "c", "hint"}:
                 remaining: list[tuple[str, str, str]] = []
                 for code, label in CLUE_LANGUAGES:
@@ -1862,98 +1898,119 @@ def run_international_names(settings: GameSettings) -> None:
             if guess.name == target.name:
                 print("Correct!")
                 bgm.play_completion_sound()
-                return
+                return True
 
             print("Nope.")
             turn += 1
 
         print(f"Out of guesses. The English name was {target.name}.")
+        return False
+
+
+def _route_bgm_after_game(result: bool | None) -> None:
+    """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
+    if result is True:
+        bgm.switch_to_menu_bgm()
+    elif result is False:
+        bgm.switch_to_loser_bgm()
 
 
 def main() -> None:
     _enable_type_color_output()
     settings = GameSettings()
+    shiny_colored_menu = random.randint(1, 10) == 1
+    shiny_menu_fg = ""
+    if shiny_colored_menu:
+        shiny_menu_fg = (
+            f"\x1b[38;2;{random.randint(100, 255)};{random.randint(100, 255)};{random.randint(100, 255)}m"
+        )
     bgm.setup_terminal_audio()
     bgm.configure(settings)
+    if shiny_colored_menu:
+        bgm.play_shiny_jingle()
     try:
         while True:
-            print("\n=== PokeQuiz ===")
-            print(f"Global settings: {_settings_summary(settings)}")
-            print("Note: type 'settings' to edit filters, or 'quit' to exit.")
-            print("Choose quiz mode:")
-            print("1) Pokedoku")
-            print("2) Squirdle")
-            print("3) Pokedentities")
-            print("4) Statle")
-            print("5) Who's that Pokemon!?")
-            print("6) Dexacted")
-            print("7) Movepool Madness")
-            print("8) Daycare Detective")
-            print("9) Evolutionary Enigma")
-            print("10) Ability Assessor")
-            print("11) Level Ladder")
-            print("12) Defensive Profile")
-            print("13) Safari Zone")
-            print("14) Thief's Target")
-            print("15) Ugly Ducklett")
-            print("16) Category Quiz")
-            print("17) Stat Sorter")
-            print("18) Level Race")
-            print("19) Missing Link")
-            print("20) EV Forensic")
-            print("21) International Names")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "\n=== PokeQuiz ===")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, f"Global settings: {_settings_summary(settings)}")
+            _main_menu_print(
+                shiny_colored_menu,
+                shiny_menu_fg,
+                "Note: type 'settings' to edit filters, or 'quit' to exit.",
+            )
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Choose quiz mode:")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "1) Pokedoku")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "2) Squirdle")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "3) Pokedentities")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "4) Statle")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "5) Who's that Pokemon!?")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "6) Dexacted")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "7) Movepool Madness")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "8) Daycare Detective")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "9) Evolutionary Enigma")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "10) Ability Assessor")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "11) Level Ladder")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "12) Defensive Profile")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "13) Safari Zone")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "14) Thief's Target")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "15) Ugly Ducklett")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "16) Category Quiz")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "17) Stat Sorter")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "18) Level Race")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "19) Missing Link")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "20) EV Forensic")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "21) International Names")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
                 settings = _settings_menu(settings)
-                print(f"Updated settings: {_settings_summary(settings)}")
+                _main_menu_print(shiny_colored_menu, shiny_menu_fg, f"Updated settings: {_settings_summary(settings)}")
                 continue
             if cmd in {"quit", "q", "exit"}:
                 break
             if choice == "1":
-                run_pokedoku(settings)
+                _route_bgm_after_game(run_pokedoku(settings))
             elif choice == "2":
-                run_squirdle(settings)
+                _route_bgm_after_game(run_squirdle(settings))
             elif choice == "3":
-                run_stat_quiz(settings)
+                _route_bgm_after_game(run_stat_quiz(settings))
             elif choice == "4":
-                run_statle(settings)
+                _route_bgm_after_game(run_statle(settings))
             elif choice == "5":
-                run_whos_that_pokemon(settings)
+                _route_bgm_after_game(run_whos_that_pokemon(settings))
             elif choice == "6":
-                run_dexacted(settings)
+                _route_bgm_after_game(run_dexacted(settings))
             elif choice == "7":
-                run_movepool_madness(settings)
+                _route_bgm_after_game(run_movepool_madness(settings))
             elif choice == "8":
-                run_daycare_detective(settings)
+                _route_bgm_after_game(run_daycare_detective(settings))
             elif choice == "9":
-                run_evolutionary_enigma(settings)
+                _route_bgm_after_game(run_evolutionary_enigma(settings))
             elif choice == "10":
-                run_ability_assessor(settings)
+                _route_bgm_after_game(run_ability_assessor(settings))
             elif choice == "11":
-                run_level_ladder(settings)
+                _route_bgm_after_game(run_level_ladder(settings))
             elif choice == "12":
-                run_defensive_profile(settings)
+                _route_bgm_after_game(run_defensive_profile(settings))
             elif choice == "13":
-                run_safari_zone(settings)
+                _route_bgm_after_game(run_safari_zone(settings))
             elif choice == "14":
-                run_thiefs_target(settings)
+                _route_bgm_after_game(run_thiefs_target(settings))
             elif choice == "15":
-                run_odd_one_out(settings)
+                _route_bgm_after_game(run_odd_one_out(settings))
             elif choice == "16":
-                run_category_quiz(settings)
+                _route_bgm_after_game(run_category_quiz(settings))
             elif choice == "17":
-                run_stat_sorter(settings)
+                _route_bgm_after_game(run_stat_sorter(settings))
             elif choice == "18":
-                run_level_race(settings)
+                _route_bgm_after_game(run_level_race(settings))
             elif choice == "19":
-                run_missing_link(settings)
+                _route_bgm_after_game(run_missing_link(settings))
             elif choice == "20":
-                run_ev_forensic(settings)
+                _route_bgm_after_game(run_ev_forensic(settings))
             elif choice == "21":
-                run_international_names(settings)
+                _route_bgm_after_game(run_international_names(settings))
             else:
-                print("Unknown choice.")
+                _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
         bgm.shutdown_terminal_audio()
 
