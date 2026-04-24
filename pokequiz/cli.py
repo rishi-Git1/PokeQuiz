@@ -54,7 +54,7 @@ POKEDOKU_COMMAND_HELP = (
 
 def _input_bool(prompt: str, default: bool = True) -> bool:
     while True:
-        raw = input(f"{prompt} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
+        raw = input(f"{prompt} [y/n]: ").strip().lower()
         if not raw:
             print("Please enter y/yes or n/no.")
             continue
@@ -63,6 +63,16 @@ def _input_bool(prompt: str, default: bool = True) -> bool:
         if raw in {"n", "no"}:
             return False
         print("Please enter y/yes or n/no.")
+
+
+def _input_guess_count(prompt: str, default: int) -> int:
+    while True:
+        raw = input(f"{prompt} [default={default}]: ").strip()
+        if not raw:
+            return default
+        if raw.isdigit() and int(raw) > 0:
+            return int(raw)
+        print("Please enter a positive whole number.")
 
 
 def _settings_menu() -> GameSettings:
@@ -136,6 +146,9 @@ def run_pokedoku() -> None:
             if not name:
                 print("Enter a Pokemon name after the row and column.")
                 continue
+            if not dex.by_name(name):
+                print(f'Unknown Pokémon: "{name}"')
+                continue
             answers[r - 1][c - 1] = name
             continue
         print("Unrecognized input. Try: 2 1 charizard  |  clear 2 1  |  done")
@@ -152,9 +165,10 @@ def run_squirdle() -> None:
     dex = load_dex()
     settings = _settings_menu()
     pool = dex.filtered(settings)
+    max_guesses = _input_guess_count("How many guesses for Squirdle?", 8)
     target = random.choice(pool)
-    print("Guess the Pokémon. You get 8 guesses.")
-    for turn in range(1, 9):
+    print(f"Guess the Pokémon. You get {max_guesses} guesses.")
+    for turn in range(1, max_guesses + 1):
         while True:
             guess_name = input(f"Guess {turn}: ").strip()
             if not guess_name:
@@ -191,12 +205,14 @@ def run_stat_quiz() -> None:
         alternatives = [p for p in pool if p.name != LAST_STAT_QUIZ]
         mon = random.choice(alternatives)
     LAST_STAT_QUIZ = mon.name
+    max_guesses = _input_guess_count("How many guesses for Stat identity quiz?", 3)
 
     print("Identify this Pokémon from stats:")
     print(prompt_for_mon(mon))
-    for tries in range(1, 4):
+    hint_turn = max_guesses - 1 if max_guesses > 1 else None
+    for tries in range(1, max_guesses + 1):
         while True:
-            guess = input(f"Guess {tries}/3: ").strip()
+            guess = input(f"Guess {tries}/{max_guesses}: ").strip()
             if not guess:
                 print("Guess cannot be blank.")
                 continue
@@ -208,9 +224,41 @@ def run_stat_quiz() -> None:
         if is_correct_guess(mon, guess):
             print("Correct!")
             return
-        if tries == 2:
+        if hint_turn is not None and tries == hint_turn:
             print(f"Hint: types={','.join(mon.types)} generation={mon.generation}")
     print(f"Nope. It was {mon.name}.")
+
+
+def run_whos_that_pokemon() -> None:
+    dex = load_dex()
+    settings = _settings_menu()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return
+
+    max_guesses = _input_guess_count("How many guesses for Who's that Pokemon!?", 3)
+    target = random.choice(pool)
+
+    print("Who's that Pokemon!?")
+    print_statle_sprite(target)
+    for turn in range(1, max_guesses + 1):
+        while True:
+            guess_name = input(f"Guess {turn}/{max_guesses}: ").strip()
+            if not guess_name:
+                print("Guess cannot be blank.")
+                continue
+            guess = dex.by_name(guess_name)
+            if not guess:
+                print(f'Unknown Pokémon: "{guess_name}"')
+                continue
+            break
+        if guess.name == target.name:
+            print("Correct!")
+            return
+        print("Nope, try again.")
+
+    print(f"Out of guesses. It was {target.name}.")
 
 
 def run_statle() -> None:
@@ -268,7 +316,8 @@ def main() -> None:
         print("2) Squirdle")
         print("3) Stat identity quiz")
         print("4) Statle builder")
-        print("5) Quit")
+        print("5) Who's that Pokemon!?")
+        print("6) Quit")
         choice = input("> ").strip()
         if choice == "1":
             run_pokedoku()
@@ -279,6 +328,8 @@ def main() -> None:
         elif choice == "4":
             run_statle()
         elif choice == "5":
+            run_whos_that_pokemon()
+        elif choice == "6":
             break
         else:
             print("Unknown choice.")
