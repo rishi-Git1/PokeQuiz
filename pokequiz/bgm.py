@@ -1,4 +1,4 @@
-"""Optional terminal audio: menu BGM, input blip, and win completion stinger."""
+"""Optional terminal audio: menu BGM, input blip, last-guess warning, and win stinger."""
 
 from __future__ import annotations
 
@@ -17,10 +17,12 @@ _original_input = builtins.input
 _input_hook_installed = False
 _select_sound = None  # pygame.mixer.Sound | None
 _completion_sound = None  # pygame.mixer.Sound | None
+_low_health_sound = None  # pygame.mixer.Sound | None
 
 _mute_bgm = False
 _mute_input_sfx = False
 _mute_completion_sfx = False
+_mute_low_health_sfx = False
 
 
 def _assets_dir() -> Path:
@@ -51,6 +53,15 @@ def _default_completion_paths() -> list[Path]:
         base / "completion.wav",
         base / "completion.ogg",
         base / "completion.mp3",
+    ]
+
+
+def _default_low_health_paths() -> list[Path]:
+    base = _assets_dir()
+    return [
+        base / "low_health.wav",
+        base / "low_health.ogg",
+        base / "low_health.mp3",
     ]
 
 
@@ -90,6 +101,18 @@ def resolve_completion_sound() -> Path | None:
     return None
 
 
+def resolve_low_health_sound() -> Path | None:
+    env = (os.environ.get("POKEQUIZ_LOW_HEALTH_SFX") or "").strip()
+    if env:
+        p = Path(env).expanduser()
+        if p.is_file():
+            return p
+    for candidate in _default_low_health_paths():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _bgm_volume() -> float:
     raw = (os.environ.get("POKEQUIZ_BGM_VOLUME") or "0.35").strip()
     try:
@@ -117,6 +140,15 @@ def _completion_volume() -> float:
     return max(0.0, min(1.0, v))
 
 
+def _low_health_volume() -> float:
+    raw = (os.environ.get("POKEQUIZ_LOW_HEALTH_SFX_VOLUME") or "0.7").strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        return 0.7
+    return max(0.0, min(1.0, v))
+
+
 def _import_pygame():
     import pygame
 
@@ -125,10 +157,11 @@ def _import_pygame():
 
 def configure(settings: GameSettings) -> None:
     """Sync mute flags from settings; start or stop BGM to match."""
-    global _mute_bgm, _mute_input_sfx, _mute_completion_sfx
+    global _mute_bgm, _mute_input_sfx, _mute_completion_sfx, _mute_low_health_sfx
     _mute_bgm = settings.mute_bgm
     _mute_input_sfx = settings.mute_input_sfx
     _mute_completion_sfx = settings.mute_completion_sfx
+    _mute_low_health_sfx = settings.mute_low_health_sfx
     if _mute_bgm:
         stop()
     else:
@@ -263,6 +296,39 @@ def play_completion_sound() -> None:
         pass
 
 
+def _load_low_health_sound() -> None:
+    global _low_health_sound
+    if _low_health_sound is not None:
+        return
+    path = resolve_low_health_sound()
+    if path is None:
+        return
+    pygame = _import_pygame()
+    try:
+        snd = pygame.mixer.Sound(str(path))
+        snd.set_volume(_low_health_volume())
+        _low_health_sound = snd
+    except Exception:
+        _low_health_sound = None
+
+
+def play_low_health_sound() -> None:
+    """Plays when the player reaches their last guess (only if max guesses > 1)."""
+    if _mute_low_health_sfx:
+        return
+    if resolve_low_health_sound() is None:
+        return
+    if not ensure_mixer():
+        return
+    _load_low_health_sound()
+    if _low_health_sound is None:
+        return
+    try:
+        _low_health_sound.play()
+    except Exception:
+        pass
+
+
 def _input_with_select_sound(prompt: str = "") -> str:
     line = _original_input(prompt)
     play_pokedex_select_sound()
@@ -294,7 +360,8 @@ def setup_terminal_audio() -> None:
     want_bgm = resolve_bgm_file() is not None
     want_sfx = resolve_pokedex_select_sound() is not None
     want_completion = resolve_completion_sound() is not None
-    if not want_bgm and not want_sfx and not want_completion:
+    want_low_health = resolve_low_health_sound() is not None
+    if not want_bgm and not want_sfx and not want_completion and not want_low_health:
         return
     try:
         _import_pygame()
@@ -314,6 +381,11 @@ def setup_terminal_audio() -> None:
                 "Tip: for win fanfare, `pip install pygame` and place completion.wav/ogg/mp3 "
                 "in pokequiz/assets/ (or set POKEQUIZ_COMPLETION_SFX)."
             )
+        if want_low_health:
+            print(
+                "Tip: for last-guess warning, `pip install pygame` and place low_health.wav/ogg/mp3 "
+                "in pokequiz/assets/ (or set POKEQUIZ_LOW_HEALTH_SFX)."
+            )
         return
     if not ensure_mixer():
         return
@@ -321,13 +393,14 @@ def setup_terminal_audio() -> None:
 
 
 def shutdown_terminal_audio() -> None:
-    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound
+    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound, _low_health_sound
     if _input_hook_installed:
         builtins.input = _original_input
         _input_hook_installed = False
     stop()
     _select_sound = None
     _completion_sound = None
+    _low_health_sound = None
     if _mixer_ready:
         try:
             pygame = _import_pygame()

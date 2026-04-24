@@ -49,6 +49,7 @@ class GameSettings:
     mute_bgm: bool = False
     mute_input_sfx: bool = False
     mute_completion_sfx: bool = False
+    mute_low_health_sfx: bool = False
 
     def accepts(self, mon: Pokemon) -> bool:
         if not self.allow_megas and mon.is_mega:

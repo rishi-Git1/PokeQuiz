@@ -228,6 +228,7 @@ def _settings_menu(current: GameSettings) -> GameSettings:
         print(f"4) Background music: {'MUTED' if s.mute_bgm else 'ON'}")
         print(f"5) Input sound (each Enter): {'MUTED' if s.mute_input_sfx else 'ON'}")
         print(f"6) Win / completion fanfare: {'MUTED' if s.mute_completion_sfx else 'ON'}")
+        print(f"7) Last-guess warning sound: {'MUTED' if s.mute_low_health_sfx else 'ON'}")
         print("0) Done")
         raw = input("Settings> ").strip()
         if raw in {"0", "done", "back", "q", "quit"}:
@@ -252,8 +253,10 @@ def _settings_menu(current: GameSettings) -> GameSettings:
             s.mute_input_sfx = not s.mute_input_sfx
         elif raw == "6":
             s.mute_completion_sfx = not s.mute_completion_sfx
+        elif raw == "7":
+            s.mute_low_health_sfx = not s.mute_low_health_sfx
         else:
-            print("Unknown choice. Pick 0–6.")
+            print("Unknown choice. Pick 0–7.")
             continue
         bgm.configure(s)
 
@@ -263,10 +266,16 @@ def _settings_summary(settings: GameSettings) -> str:
     mus = "off" if settings.mute_bgm else "on"
     inp = "off" if settings.mute_input_sfx else "on"
     win = "off" if settings.mute_completion_sfx else "on"
+    low = "off" if settings.mute_low_health_sfx else "on"
     return (
         f"megas={'on' if settings.allow_megas else 'off'} | regionals={'on' if settings.allow_regionals else 'off'} "
-        f"| gens={gens} | music={mus} enter={inp} win={win}"
+        f"| gens={gens} | music={mus} enter={inp} win={win} last={low}"
     )
+
+
+def _last_guess_warning(turn: int, max_guesses: int) -> None:
+    if max_guesses > 1 and turn == max_guesses:
+        bgm.play_low_health_sound()
 
 
 def run_pokedoku(settings: GameSettings) -> None:
@@ -357,6 +366,7 @@ def run_squirdle(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     print(f"Guess the Pokémon. You get {max_guesses} guesses.")
     for turn in range(1, max_guesses + 1):
+        _last_guess_warning(turn, max_guesses)
         while True:
             guess_name = input(f"Guess {turn}: ").strip()
             if not guess_name:
@@ -407,6 +417,7 @@ def run_stat_quiz(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     hint_turn = max_guesses - 1 if max_guesses > 1 else None
     for tries in range(1, max_guesses + 1):
+        _last_guess_warning(tries, max_guesses)
         while True:
             guess = input(f"Guess {tries}/{max_guesses}: ").strip()
             if not guess:
@@ -447,6 +458,7 @@ def run_whos_that_pokemon(settings: GameSettings) -> None:
     print("Who's that Pokemon!?")
     print_statle_sprite(target)
     for turn in range(1, max_guesses + 1):
+        _last_guess_warning(turn, max_guesses)
         while True:
             guess_name = input(f"Guess {turn}/{max_guesses}: ").strip()
             if not guess_name:
@@ -599,6 +611,7 @@ def run_movepool_madness(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -662,6 +675,7 @@ def run_daycare_detective(settings: GameSettings) -> None:
         seen_guesses: set[str] = set()
         turn = 1
         while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
             raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
             if not raw:
                 print("Guess cannot be blank.")
@@ -717,6 +731,7 @@ def run_evolutionary_enigma(settings: GameSettings) -> None:
         seen_guesses: set[str] = set()
         turn = 1
         while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
             raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
             if not raw:
                 print("Guess cannot be blank.")
@@ -792,6 +807,7 @@ def run_ability_assessor(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -883,6 +899,7 @@ def run_level_ladder(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -962,6 +979,7 @@ def run_defensive_profile(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -1043,6 +1061,7 @@ def run_safari_zone(settings: GameSettings) -> None:
         turn = 1
         revealed_set = set(target_clues[:revealed])
         while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
             raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
             if not raw:
                 print("Guess cannot be blank.")
@@ -1124,6 +1143,7 @@ def run_thiefs_target(settings: GameSettings) -> None:
         seen_guesses: set[str] = set()
         turn = 1
         while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
             raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
             if not raw:
                 print("Guess cannot be blank.")
@@ -1192,6 +1212,7 @@ def run_odd_one_out(settings: GameSettings) -> None:
     seen_choices: set[int] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Pick odd one out ({turn}/{max_guesses}): ").strip()
         if not raw:
             print("Input cannot be blank.")
@@ -1277,6 +1298,7 @@ def run_category_quiz(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or 'quit'): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -1374,6 +1396,7 @@ def run_stat_sorter(settings: GameSettings) -> None:
     seen_submissions: set[tuple[str, ...]] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Order guess {turn}/{max_guesses} (or 'quit'): ").strip()
         if not raw:
             print("Input cannot be blank.")
@@ -1475,6 +1498,7 @@ def run_level_race(settings: GameSettings) -> None:
 
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Order guess {turn}/{max_guesses} (or 'quit'): ").strip()
         if not raw:
             print("Input cannot be blank.")
@@ -1571,6 +1595,7 @@ def run_missing_link(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Move guess {turn}/{max_guesses} (or command): ").strip()
         if not raw:
             print("Input cannot be blank.")
@@ -1669,6 +1694,7 @@ def run_ev_forensic(settings: GameSettings) -> None:
     seen_guesses: set[str] = set()
     turn = 1
     while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
         raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
         if not raw:
             print("Guess cannot be blank.")
@@ -1787,6 +1813,7 @@ def run_international_names(settings: GameSettings) -> None:
         seen_guesses: set[str] = set()
         turn = 1
         while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
             raw = input(f"Guess {turn}/{max_guesses} (or command): ").strip()
             if not raw:
                 print("Guess cannot be blank.")
