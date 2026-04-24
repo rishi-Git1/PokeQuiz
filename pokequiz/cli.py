@@ -19,6 +19,8 @@ from pokequiz.games.level_ladder import display_move_name as display_level_move_
 from pokequiz.games.level_ladder import level_up_moves_for_name
 from pokequiz.games.level_race import build_challenge as build_level_race_challenge
 from pokequiz.games.level_race import display_move_name as display_level_race_move_name
+from pokequiz.games.missing_link import build_challenge as build_missing_link_challenge
+from pokequiz.games.missing_link import move_info as missing_link_move_info
 from pokequiz.games.movepool_madness import build_challenge, display_move_name, guess_satisfies_moves, legal_moves_for_name
 from pokequiz.games.odd_one_out import build_challenge as build_odd_one_out_challenge
 from pokequiz.games.pokedoku import (
@@ -1323,6 +1325,82 @@ def run_level_race(settings: GameSettings) -> None:
     print(f"Out of guesses. Correct order was: {details}")
 
 
+def run_missing_link(settings: GameSettings) -> None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 1:
+        print("No Pokémon match your filter settings.")
+        return
+
+    try:
+        mon, moves, missing_idx, missing_move = build_missing_link_challenge(pool)
+    except ValueError as err:
+        print(err)
+        return
+
+    info = missing_link_move_info(missing_move)
+    if info is None:
+        print("Could not load move clue data right now (API issue).")
+        return
+
+    max_guesses = _input_guess_count("How many guesses for Missing Link?", 4)
+    print("Missing Link: one level-up move is redacted. Guess the missing move.")
+    print("Commands: clue (manual clue reveal), quit")
+    print(f"Pokémon: {mon.name}")
+    for idx, (lvl, mv) in enumerate(moves):
+        if idx == missing_idx:
+            print(f"Lv {lvl}: [ ??? ]")
+        else:
+            print(f"Lv {lvl}: {display_level_move_name(mv)}")
+
+    clue_stage = 0
+    seen_guesses: set[str] = set()
+    turn = 1
+    while turn <= max_guesses:
+        raw = input(f"Move guess {turn}/{max_guesses} (or command): ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f"Leaving Missing Link. The move was {display_level_move_name(missing_move)}.")
+            return
+        if cmd in {"clue", "c", "hint"}:
+            if clue_stage == 0:
+                print(f"Clue 1: Move type is {info['type']}.")
+            elif clue_stage == 1:
+                print(f"Clue 2: Move class is {info['damage_class']}.")
+            elif clue_stage == 2:
+                if info["damage_class"] in {"Physical", "Special"} and info["power"] is not None:
+                    print(f"Clue 3: Move power is {info['power']}.")
+                else:
+                    print("Clue 3: This move does not have damage power (status move).")
+            else:
+                print("No more clues available.")
+                continue
+            clue_stage += 1
+            continue
+
+        guess_info = missing_link_move_info(raw)
+        if guess_info is None:
+            print(f'Unknown move: "{raw}"')
+            continue
+        guess_slug = str(guess_info["name"])
+        if guess_slug in seen_guesses:
+            print(f'You already guessed "{display_level_move_name(guess_slug)}". Try a different move.')
+            continue
+        seen_guesses.add(guess_slug)
+
+        if guess_slug == missing_move:
+            print("Correct!")
+            return
+
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. The move was {display_level_move_name(missing_move)}.")
+
+
 def main() -> None:
     settings = GameSettings()
     while True:
@@ -1348,6 +1426,7 @@ def main() -> None:
         print("16) Category Quiz")
         print("17) Stat Sorter")
         print("18) Level Race")
+        print("19) Missing Link")
         choice = input("> ").strip()
         cmd = choice.casefold()
         if cmd in {"settings", "s"}:
@@ -1392,6 +1471,8 @@ def main() -> None:
             run_stat_sorter(settings)
         elif choice == "18":
             run_level_race(settings)
+        elif choice == "19":
+            run_missing_link(settings)
         else:
             print("Unknown choice.")
 
