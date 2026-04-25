@@ -54,6 +54,16 @@ from pokequiz.games.all_natural import (
     display_type_name as display_natural_gift_type_name,
     parse_guess as all_natural_parse_guess,
 )
+from pokequiz.games.environment_map import (
+    build_challenge as build_environment_map_challenge,
+    parse_guess as environment_map_parse_guess,
+    reveal_answer_line as environment_map_reveal_answer_line,
+)
+from pokequiz.games.method_man import (
+    build_challenge as build_method_man_challenge,
+    display_method_name as display_method_man_method_name,
+    parse_method_guess as method_man_parse_method_guess,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2604,6 +2614,108 @@ def run_all_natural(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_environment_map(_settings: GameSettings) -> bool | None:
+    ch = build_environment_map_challenge()
+    ensure_move_guess_index()
+    max_guesses = _input_guess_count("How many guesses for Environment Map?", 5)
+    print()
+    print("Environment Map: given generation + area, name Nature Power's resulting move.")
+    print(f"Generation: {ch.generation_label}")
+    print(f"Environment: {ch.area_label}")
+    print("Commands: quit")
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Move ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Environment Map. Answer was "
+                f"{environment_map_reveal_answer_line(ch)}."
+            )
+            return False
+
+        canon = move_slug_from_user_guess(raw)
+        ok, key, err = environment_map_parse_guess(canon, ch, raw)
+        if not key:
+            print(err or f'That does not match a known move: "{raw}".')
+            continue
+        if key in seen:
+            print(f'You already guessed "{display_move_match_name(key)}".')
+            continue
+        seen.add(key)
+        if ok:
+            print(f"Correct! It was {environment_map_reveal_answer_line(ch)}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(f"Out of guesses. Answer was {environment_map_reveal_answer_line(ch)}.")
+    return False
+
+
+def run_method_man(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return None
+    ch = build_method_man_challenge(pool)
+    if ch is None:
+        print("Could not build Method Man round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Method Man?", 1)
+    print()
+    print("Method Man: identify the move's primary learn method for the shown generation.")
+    print(f"Pokémon: {ch.pokemon_name}")
+    print(f"Generation: {ch.generation}")
+    print(f"Move: {display_move_match_name(ch.move_slug)}")
+    print("Answer with one method: Level-up, Machine, Egg, or Tutor. Commands: quit")
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Method ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Method Man. Answer was "
+                f"{display_method_man_method_name(ch.primary_method)}."
+            )
+            return False
+        canon = method_man_parse_method_guess(raw)
+        if canon is None:
+            print(f'Unknown method: "{raw}". Use Level-up, Machine, Egg, or Tutor.')
+            continue
+        if canon in seen:
+            print(f'You already guessed "{display_method_man_method_name(canon)}".')
+            continue
+        seen.add(canon)
+        if canon == ch.primary_method:
+            print(f"Correct! It was {display_method_man_method_name(ch.primary_method)}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(
+        "Out of guesses. Answer was "
+        f"{display_method_man_method_name(ch.primary_method)}."
+    )
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2666,6 +2778,8 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "29) Machine Serial")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "30) Fling Force")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "31) All Natural")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "32) Environment Map")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "33) Method Man")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2736,6 +2850,10 @@ def main() -> None:
                 _route_bgm_after_game(run_fling_force(settings))
             elif choice == "31":
                 _route_bgm_after_game(run_all_natural(settings))
+            elif choice == "32":
+                _route_bgm_after_game(run_environment_map(settings))
+            elif choice == "33":
+                _route_bgm_after_game(run_method_man(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

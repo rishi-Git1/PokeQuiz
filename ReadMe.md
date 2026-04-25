@@ -145,6 +145,12 @@ Given an **item**, guess either its **Fling Power** (integer) or its **Fling sta
 ### 31) All Natural
 Given a **Berry**, guess the move Natural Gift result as **Type + Base Power** in one line (for example, `Fire 80` or `80 Fire`). No clues in this mode. Configurable guess count; malformed input or unknown type text does not consume turns; repeated guesses are detected; standard wrong/completion/last-guess audio behavior applies.
 
+### 32) Environment Map
+Given a **generation + battle environment** (Nature Power context), guess the move Nature Power becomes in that scenario. Uses a curated internal mapping table (PokéAPI does not expose this mapping as a direct field). No clues in this mode. Configurable guess count; unknown move names and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
+### 33) Method Man
+Given a **Pokémon**, **generation**, and **move**, guess the move's **primary learn method** in that generation (`Level-up`, `Machine`, `Egg`, or `Tutor`) using generation-specific learn-method data from move `version_group_details`. No clues in this mode. Configurable guess count; unknown method text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
