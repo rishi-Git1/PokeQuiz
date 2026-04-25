@@ -84,6 +84,9 @@ from pokequiz.games.metronome_blacklist import (
     parse_yes_no_guess as parse_metronome_yes_no_guess,
 )
 from pokequiz.games.stat_scramble import build_challenge as build_stat_scramble_challenge
+from pokequiz.games.catch_hatch import build_challenge as build_catch_hatch_challenge
+from pokequiz.games.sell_quiz import build_challenge as build_sell_challenge
+from pokequiz.games.sell_quiz import display_item_name as display_sell_item_name
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -137,6 +140,14 @@ _DEX_IT_SESSION_BEST: int = 0
 _POWER_LEVELS_SESSION_BEST: int = 0
 # Best correct streak in Metronome Blacklist (mode 37) for this process; resets when app exits.
 _METRONOME_SESSION_BEST: int = 0
+# Best correct streak in Catch & Hatch (mode 39) for this process; resets when app exits.
+_CATCH_HATCH_SESSION_BEST: int = 0
+# Best correct streak in Method Man (mode 33) for this process; resets when app exits.
+_METHOD_MAN_SESSION_BEST: int = 0
+# Best correct streak in Stat Scramble (mode 38) for this process; resets when app exits.
+_STAT_SCRAMBLE_SESSION_BEST: int = 0
+# Best correct streak in Sell (mode 40) for this process; resets when app exits.
+_SELL_SESSION_BEST: int = 0
 _TYPE_COLOR_PATCHED = False
 _PLAIN_TERMINAL_PRINT: Callable[..., None] = builtins.print
 
@@ -2683,59 +2694,76 @@ def run_environment_map(_settings: GameSettings) -> bool | None:
 
 
 def run_method_man(settings: GameSettings) -> bool | None:
+    global _METHOD_MAN_SESSION_BEST
+
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
         return None
-    ch = build_method_man_challenge(pool)
-    if ch is None:
-        print("Could not build Method Man round (API issue). Try again.")
-        return None
 
-    max_guesses = _input_guess_count("How many guesses for Method Man?", 1)
+    max_guesses = 1
     print()
     print("Method Man: identify the move's primary learn method for the shown generation.")
-    print(f"Pokémon: {ch.pokemon_name}")
-    print(f"Generation: {ch.generation}")
-    print(f"Move: {display_move_match_name(ch.move_slug)}")
+    print(f"Session high score (best streak this app run): {_METHOD_MAN_SESSION_BEST}")
     print("Answer with one method: Level-up, Machine, Egg, or Tutor. Commands: quit")
-    seen: set[str] = set()
+    streak = 0
 
-    turn = 1
-    while turn <= max_guesses:
-        _last_guess_warning(turn, max_guesses)
-        raw = input(f"Method ({turn}/{max_guesses}, or command): ").strip()
-        if not raw:
-            print("Guess cannot be blank.")
-            continue
-        cmd = raw.casefold()
-        if cmd in {"quit", "q", "exit"}:
-            print(
-                "Leaving Method Man. Answer was "
-                f"{display_method_man_method_name(ch.primary_method)}."
-            )
-            return False
-        canon = method_man_parse_method_guess(raw)
-        if canon is None:
-            print(f'Unknown method: "{raw}". Use Level-up, Machine, Egg, or Tutor.')
-            continue
-        if canon in seen:
-            print(f'You already guessed "{display_method_man_method_name(canon)}".')
-            continue
-        seen.add(canon)
-        if canon == ch.primary_method:
-            print(f"Correct! It was {display_method_man_method_name(ch.primary_method)}.")
-            bgm.play_completion_sound()
-            return True
-        _wrong_guess_feedback()
-        turn += 1
+    while True:
+        ch = build_method_man_challenge(pool)
+        if ch is None:
+            print("Could not build Method Man round (API issue). Try again.")
+            return None
+        print(f"\nPokémon: {ch.pokemon_name}")
+        print(f"Generation: {ch.generation}")
+        print(f"Move: {display_move_match_name(ch.move_slug)}")
 
-    print(
-        "Out of guesses. Answer was "
-        f"{display_method_man_method_name(ch.primary_method)}."
-    )
-    return False
+        turn = 1
+        while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
+            raw = input("Method [single guess or quit]: ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                print(
+                    "Leaving Method Man. Answer was "
+                    f"{display_method_man_method_name(ch.primary_method)}."
+                )
+                if streak > 0:
+                    print(f"Final streak: {streak}. Session high: {_METHOD_MAN_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_METHOD_MAN_SESSION_BEST}.")
+                return False
+            canon = method_man_parse_method_guess(raw)
+            if canon is None:
+                print(f'Unknown method: "{raw}". Use Level-up, Machine, Egg, or Tutor.')
+                continue
+            if canon == ch.primary_method:
+                streak += 1
+                old_best = _METHOD_MAN_SESSION_BEST
+                _METHOD_MAN_SESSION_BEST = max(_METHOD_MAN_SESSION_BEST, streak)
+                if streak > old_best:
+                    print(
+                        f"Correct! It was {display_method_man_method_name(ch.primary_method)}. "
+                        f"New session high: {_METHOD_MAN_SESSION_BEST}!"
+                    )
+                else:
+                    print(
+                        f"Correct! It was {display_method_man_method_name(ch.primary_method)}. "
+                        f"Streak: {streak} | Session high: {_METHOD_MAN_SESSION_BEST}"
+                    )
+                bgm.play_completion_sound()
+            else:
+                _wrong_guess_feedback()
+                print(f"Answer was {display_method_man_method_name(ch.primary_method)}.")
+                if streak > 0:
+                    print(f"Streak ended at {streak}. Session high: {_METHOD_MAN_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_METHOD_MAN_SESSION_BEST}.")
+                streak = 0
+            break
 
 
 def run_characteristic_decoder(_settings: GameSettings) -> bool | None:
@@ -2934,56 +2962,224 @@ def run_metronome_blacklist(_settings: GameSettings) -> bool | None:
 
 
 def run_stat_scramble(settings: GameSettings) -> bool | None:
+    global _STAT_SCRAMBLE_SESSION_BEST
+
     dex = load_dex()
     pool = dex.filtered(settings)
     if not pool:
         print("No Pokémon match your filter settings.")
         return None
-    ch = build_stat_scramble_challenge(pool)
-    if ch is None:
-        print("Could not build Stat Scramble round.")
-        return None
 
-    max_guesses = _input_guess_count("How many guesses for Stat Scramble?", 1)
+    max_guesses = 1
     print()
     print("Stat Scramble: identify the correct value for the requested base stat.")
-    print(f"Pokémon: {ch.pokemon_name}")
-    print("Values: " + ", ".join(str(v) for v in ch.scrambled_values))
-    print(f"Question: Which of these is {ch.pokemon_name}'s {ch.asked_stat}?")
+    print(f"Session high score (best streak this app run): {_STAT_SCRAMBLE_SESSION_BEST}")
     print("Commands: quit")
-    seen: set[int] = set()
+    streak = 0
 
-    turn = 1
-    while turn <= max_guesses:
-        _last_guess_warning(turn, max_guesses)
-        raw = input(f"Value ({turn}/{max_guesses}, or command): ").strip()
-        if not raw:
-            print("Guess cannot be blank.")
-            continue
-        cmd = raw.casefold()
-        if cmd in {"quit", "q", "exit"}:
-            print(f"Leaving Stat Scramble. Answer was {ch.answer_value}.")
-            return False
-        if not raw.lstrip("+-").isdigit():
-            print(f'Invalid number: "{raw}".')
-            continue
-        val = int(raw)
-        if val not in ch.scrambled_values:
-            print(f"{val} is not in the shown value set.")
-            continue
-        if val in seen:
-            print(f'You already guessed "{val}".')
-            continue
-        seen.add(val)
-        if val == ch.answer_value:
-            print(f"Correct! {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}.")
-            bgm.play_completion_sound()
-            return True
-        _wrong_guess_feedback()
-        turn += 1
+    while True:
+        ch = build_stat_scramble_challenge(pool)
+        if ch is None:
+            print("Could not build Stat Scramble round.")
+            return None
+        print(f"\nPokémon: {ch.pokemon_name}")
+        print("Values: " + ", ".join(str(v) for v in ch.scrambled_values))
+        print(f"Question: Which of these is {ch.pokemon_name}'s {ch.asked_stat}?")
+        turn = 1
+        while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
+            raw = input("Value [single guess or quit]: ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                print(f"Leaving Stat Scramble. Answer was {ch.answer_value}.")
+                if streak > 0:
+                    print(f"Final streak: {streak}. Session high: {_STAT_SCRAMBLE_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_STAT_SCRAMBLE_SESSION_BEST}.")
+                return False
+            if not raw.lstrip("+-").isdigit():
+                print(f'Invalid number: "{raw}".')
+                continue
+            val = int(raw)
+            if val not in ch.scrambled_values:
+                print(f"{val} is not in the shown value set.")
+                continue
+            if val == ch.answer_value:
+                streak += 1
+                old_best = _STAT_SCRAMBLE_SESSION_BEST
+                _STAT_SCRAMBLE_SESSION_BEST = max(_STAT_SCRAMBLE_SESSION_BEST, streak)
+                if streak > old_best:
+                    print(
+                        f"Correct! {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}. "
+                        f"New session high: {_STAT_SCRAMBLE_SESSION_BEST}!"
+                    )
+                else:
+                    print(
+                        f"Correct! {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}. "
+                        f"Streak: {streak} | Session high: {_STAT_SCRAMBLE_SESSION_BEST}"
+                    )
+                bgm.play_completion_sound()
+            else:
+                _wrong_guess_feedback()
+                print(f"{ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}.")
+                if streak > 0:
+                    print(f"Streak ended at {streak}. Session high: {_STAT_SCRAMBLE_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_STAT_SCRAMBLE_SESSION_BEST}.")
+                streak = 0
+            break
 
-    print(f"Out of guesses. {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}.")
-    return False
+
+def run_catch_hatch(settings: GameSettings) -> bool | None:
+    global _CATCH_HATCH_SESSION_BEST
+
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return None
+
+    max_guesses = 1
+    print()
+    print("Catch & Hatch: identify which shown value is the Capture Rate.")
+    print(f"Session high score (best streak this app run): {_CATCH_HATCH_SESSION_BEST}")
+    print("Answer with the capture-rate value itself (or type quit).")
+    streak = 0
+
+    while True:
+        ch = build_catch_hatch_challenge(pool)
+        if ch is None:
+            print("Could not build Catch & Hatch round (API issue). Try again.")
+            return None
+        print(f"\nPokémon: {ch.pokemon_name}")
+        print(f"Pool: [{ch.shown_values[0]}, {ch.shown_values[1]}]")
+        print("Question: Which of these is the Capture Rate?")
+
+        turn = 1
+        while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
+            raw = input("Capture Rate value [single guess or quit]: ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                print(
+                    "Leaving Catch & Hatch. Capture Rate was "
+                    f"{ch.capture_rate}; Base Happiness was {ch.base_happiness}."
+                )
+                if streak > 0:
+                    print(f"Final streak: {streak}. Session high: {_CATCH_HATCH_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_CATCH_HATCH_SESSION_BEST}.")
+                return False
+            if not raw.lstrip("+-").isdigit():
+                print(f'Invalid number: "{raw}".')
+                continue
+            guessed = int(raw)
+            if guessed not in ch.shown_values:
+                print(f"{guessed} is not one of the two shown values.")
+                continue
+            if guessed == ch.capture_rate:
+                streak += 1
+                old_best = _CATCH_HATCH_SESSION_BEST
+                _CATCH_HATCH_SESSION_BEST = max(_CATCH_HATCH_SESSION_BEST, streak)
+                if streak > old_best:
+                    print(
+                        "Correct! Capture Rate is "
+                        f"{ch.capture_rate}, Base Happiness is {ch.base_happiness}. "
+                        f"New session high: {_CATCH_HATCH_SESSION_BEST}!"
+                    )
+                else:
+                    print(
+                        "Correct! Capture Rate is "
+                        f"{ch.capture_rate}, Base Happiness is {ch.base_happiness}. "
+                        f"Streak: {streak} | Session high: {_CATCH_HATCH_SESSION_BEST}"
+                    )
+                bgm.play_completion_sound()
+            else:
+                _wrong_guess_feedback()
+                print(
+                    "Capture Rate was "
+                    f"{ch.capture_rate}; Base Happiness was {ch.base_happiness}."
+                )
+                if streak > 0:
+                    print(f"Streak ended at {streak}. Session high: {_CATCH_HATCH_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_CATCH_HATCH_SESSION_BEST}.")
+                streak = 0
+            break
+
+
+def run_sell_quiz(_settings: GameSettings) -> bool | None:
+    global _SELL_SESSION_BEST
+
+    max_guesses = 1
+    print()
+    print("Sell: estimate an item's sell price (half of buy cost).")
+    print(f"Session high score (best streak this app run): {_SELL_SESSION_BEST}")
+    print("Commands: quit")
+    streak = 0
+
+    while True:
+        ch = build_sell_challenge()
+        if ch is None:
+            print("Could not build Sell round (API issue). Try again.")
+            return None
+        print(f"\nQuestion: What is the sell price of {display_sell_item_name(ch.item_slug)}?")
+        turn = 1
+        while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
+            raw = input("Sell price [single guess or quit]: ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                print(
+                    "Leaving Sell. "
+                    f"{display_sell_item_name(ch.item_slug)} buy cost is {ch.buy_cost}, so sell price is {ch.sell_price}."
+                )
+                if streak > 0:
+                    print(f"Final streak: {streak}. Session high: {_SELL_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_SELL_SESSION_BEST}.")
+                return False
+            if not raw.lstrip("+-").isdigit():
+                print(f'Invalid number: "{raw}".')
+                continue
+            guess = int(raw)
+            if guess == ch.sell_price:
+                streak += 1
+                old_best = _SELL_SESSION_BEST
+                _SELL_SESSION_BEST = max(_SELL_SESSION_BEST, streak)
+                if streak > old_best:
+                    print(
+                        "Correct! "
+                        f"{display_sell_item_name(ch.item_slug)} buy cost is {ch.buy_cost}, so sell price is {ch.sell_price}. "
+                        f"New session high: {_SELL_SESSION_BEST}!"
+                    )
+                else:
+                    print(
+                        "Correct! "
+                        f"{display_sell_item_name(ch.item_slug)} buy cost is {ch.buy_cost}, so sell price is {ch.sell_price}. "
+                        f"Streak: {streak} | Session high: {_SELL_SESSION_BEST}"
+                    )
+                bgm.play_completion_sound()
+            else:
+                _wrong_guess_feedback()
+                print(
+                    f"{display_sell_item_name(ch.item_slug)} buy cost is {ch.buy_cost}, so sell price is {ch.sell_price}."
+                )
+                if streak > 0:
+                    print(f"Streak ended at {streak}. Session high: {_SELL_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_SELL_SESSION_BEST}.")
+                streak = 0
+            break
 
 
 def _route_bgm_after_game(result: bool | None) -> None:
@@ -3055,6 +3251,8 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "36) Nature-Flavor Matrix")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "37) Metronome Blacklist")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "38) Stat Scramble")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "39) Catch & Hatch")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Sell")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3139,6 +3337,10 @@ def main() -> None:
                 _route_bgm_after_game(run_metronome_blacklist(settings))
             elif choice == "38":
                 _route_bgm_after_game(run_stat_scramble(settings))
+            elif choice == "39":
+                _route_bgm_after_game(run_catch_hatch(settings))
+            elif choice == "40":
+                _route_bgm_after_game(run_sell_quiz(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

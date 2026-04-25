@@ -149,7 +149,7 @@ Given a **Berry**, guess the move Natural Gift result as **Type + Base Power** i
 Given a **generation + battle environment** (Nature Power context), guess the move Nature Power becomes in that scenario. Uses a curated internal mapping table (PokéAPI does not expose this mapping as a direct field). No clues in this mode. Configurable guess count; unknown move names and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
 
 ### 33) Method Man
-Given a **Pokémon**, **generation**, and **move**, guess the move's **primary learn method** in that generation (`Level-up`, `Machine`, `Egg`, or `Tutor`) using generation-specific learn-method data from move `version_group_details`. No clues in this mode. Configurable guess count; unknown method text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+Given a **Pokémon**, **generation**, and **move**, guess the move's **primary learn method** in that generation (`Level-up`, `Machine`, `Egg`, or `Tutor`) using generation-specific learn-method data from move `version_group_details`. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; unknown method text does not consume turns; standard wrong/completion audio behavior applies.
 
 ### 34) Characteristic Decoder
 Given a Pokémon **Characteristic** (from the PokéAPI characteristic endpoint), guess which stat it maps to as that Pokémon's highest IV family (`HP`, `Attack`, `Defense`, `Special Attack`, `Special Defense`, or `Speed`). No clues in this mode. Configurable guess count (defaults to 2); unknown stat text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
@@ -164,7 +164,13 @@ Given a **Nature**, answer which flavor the Pokémon **likes** or **dislikes** (
 Given a **move**, answer `Yes`/`No` on whether Metronome can call it. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Accepts `y/n` or `yes/no`. No clues; unknown input does not consume turns; standard wrong/completion audio behavior applies.
 
 ### 38) Stat Scramble
-Given a **Pokémon** and its six base-stat values in scrambled order, answer which value corresponds to one requested stat (for example, Speed). No clues in this mode. Configurable guess count (defaults to 1); invalid numbers, values not in the shown set, and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+Given a **Pokémon** and its six base-stat values in scrambled order, answer which value corresponds to one requested stat (for example, Speed). This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numbers and values not in the shown set do not consume turns; standard wrong/completion audio behavior applies.
+
+### 39) Catch & Hatch
+Given a **Pokémon** and two values (`Capture Rate` and `Base Happiness`) in shuffled order, identify which value is the **Capture Rate**. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Invalid numbers or numbers outside the shown pair do not consume turns; standard wrong/completion audio behavior applies.
+
+### 40) Sell
+Given a Poké Ball-category **item**, answer its **sell price** (half of buy cost from PokéAPI `cost`). `Master Ball` and `Luxury Ball` are excluded from this mode. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numeric input does not consume turns; standard wrong/completion audio behavior applies.
 
 ## Audio (optional)
 
