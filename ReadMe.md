@@ -163,6 +163,9 @@ Given a **Nature**, answer which flavor the Pokémon **likes** or **dislikes** (
 ### 37) Metronome Blacklist
 Given a **move**, answer `Yes`/`No` on whether Metronome can call it. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Accepts `y/n` or `yes/no`. No clues; unknown input does not consume turns; standard wrong/completion audio behavior applies.
 
+### 38) Stat Scramble
+Given a **Pokémon** and its six base-stat values in scrambled order, answer which value corresponds to one requested stat (for example, Speed). No clues in this mode. Configurable guess count (defaults to 1); invalid numbers, values not in the shown set, and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

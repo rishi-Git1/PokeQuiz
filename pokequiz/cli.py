@@ -83,6 +83,7 @@ from pokequiz.games.metronome_blacklist import (
     display_move_line as display_metronome_move_line,
     parse_yes_no_guess as parse_metronome_yes_no_guess,
 )
+from pokequiz.games.stat_scramble import build_challenge as build_stat_scramble_challenge
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2932,6 +2933,59 @@ def run_metronome_blacklist(_settings: GameSettings) -> bool | None:
             break
 
 
+def run_stat_scramble(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return None
+    ch = build_stat_scramble_challenge(pool)
+    if ch is None:
+        print("Could not build Stat Scramble round.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Stat Scramble?", 1)
+    print()
+    print("Stat Scramble: identify the correct value for the requested base stat.")
+    print(f"Pokémon: {ch.pokemon_name}")
+    print("Values: " + ", ".join(str(v) for v in ch.scrambled_values))
+    print(f"Question: Which of these is {ch.pokemon_name}'s {ch.asked_stat}?")
+    print("Commands: quit")
+    seen: set[int] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Value ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f"Leaving Stat Scramble. Answer was {ch.answer_value}.")
+            return False
+        if not raw.lstrip("+-").isdigit():
+            print(f'Invalid number: "{raw}".')
+            continue
+        val = int(raw)
+        if val not in ch.scrambled_values:
+            print(f"{val} is not in the shown value set.")
+            continue
+        if val in seen:
+            print(f'You already guessed "{val}".')
+            continue
+        seen.add(val)
+        if val == ch.answer_value:
+            print(f"Correct! {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(f"Out of guesses. {ch.pokemon_name}'s {ch.asked_stat} is {ch.answer_value}.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3000,6 +3054,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, '35) "Z-Move" Signature')
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "36) Nature-Flavor Matrix")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "37) Metronome Blacklist")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "38) Stat Scramble")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3082,6 +3137,8 @@ def main() -> None:
                 _route_bgm_after_game(run_nature_flavor_matrix(settings))
             elif choice == "37":
                 _route_bgm_after_game(run_metronome_blacklist(settings))
+            elif choice == "38":
+                _route_bgm_after_game(run_stat_scramble(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
