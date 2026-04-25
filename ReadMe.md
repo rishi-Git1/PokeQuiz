@@ -181,6 +181,9 @@ You and the CPU are each dealt **10 Pokémon cards** (from current filters). Eac
 ### 43) Stamina Hangman
 Guess a hidden **move name** letter-by-letter with a user-chosen number of hearts (lives). At the start, the game tells you the move-name length. Input one letter per turn, or use `HINT` once to reveal the move type at a cost of **2 hearts**. You can also type `ANSWER` to attempt the full move name (case-insensitive); a failed full-answer attempt costs **2 hearts**. Wrong letter guesses cost 1 heart, repeated letters are blocked, and numeric move names are excluded from this mode.
 
+### 44) Move-Chain Connections
+A 4x4 grid of 16 move names is shown. Submit guesses as four numbers (for example, `4 5 10 13`) to find hidden groups of four connected by a shared move trait. You choose how many wrong guesses are allowed (default 4). Solved groups are shown in dark blue. If a guess is one off from a real group, you are told in orange. No repeat exact-set guesses; invalid formats do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

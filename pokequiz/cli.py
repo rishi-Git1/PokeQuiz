@@ -98,6 +98,8 @@ from pokequiz.games.war_game import choose_cpu_card as war_choose_cpu_card
 from pokequiz.games.war_game import random_stat as war_random_stat
 from pokequiz.games.war_game import stat_value as war_stat_value
 from pokequiz.games.stamina_hangman import build_challenge as build_stamina_hangman_challenge
+from pokequiz.games.move_chain_connections import build_challenge as build_move_connections_challenge
+from pokequiz.games.move_chain_connections import display_move_name as display_connection_move_name
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3473,6 +3475,131 @@ def run_stamina_hangman(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_move_chain_connections(_settings: GameSettings) -> bool | None:
+    ch = build_move_connections_challenge()
+    max_wrong = _input_guess_count("How many wrong guesses allowed for Move-Chain Connections?", 4)
+    wrong = 0
+    solved: set[int] = set()
+    prior_guesses: set[frozenset[int]] = set()
+
+    # index -> group index map
+    move_to_group: dict[str, int] = {}
+    for gi, g in enumerate(ch.groups):
+        for m in g.moves:
+            move_to_group[m] = gi
+
+    orange = "\x1b[38;5;208m"
+    dark_blue = "\x1b[34m"
+    reset = "\x1b[0m"
+    cell_w = 24
+
+    def _print_grid() -> None:
+        print("\nMove-Chain Connections (pick four numbers like: 4 5 10 13)")
+        border = "+" + "+".join(["-" * cell_w for _ in range(4)]) + "+"
+        print(border)
+        for r in range(4):
+            cells: list[str] = []
+            for c in range(4):
+                idx = r * 4 + c
+                slug = ch.grid_moves[idx]
+                name = display_connection_move_name(slug)
+                max_name = cell_w - 5  # room for "NN) "
+                if len(name) > max_name:
+                    name = name[: max_name - 1] + "…"
+                plain = f"{idx+1:>2}) {name}"
+                pad = " " * max(0, cell_w - len(plain))
+                gi = move_to_group[slug]
+                if gi in solved:
+                    cell = f"{dark_blue}{plain}{reset}{pad}"
+                else:
+                    cell = plain + pad
+                cells.append(cell)
+            print("|" + "|".join(cells) + "|")
+            print(border)
+        print(f"Solved groups: {len(solved)}/4 | Wrong guesses: {wrong}/{max_wrong}")
+
+    with _plain_game_output():
+        print()
+        print("Move-Chain Connections: find four groups of four related moves.")
+        print("Rules: input exactly 4 distinct numbers. No repeat guesses.")
+        print("If your guess is one off, you'll be told in orange.")
+        print("Commands: quit")
+
+        while len(solved) < 4 and wrong < max_wrong:
+            _print_grid()
+            _last_guess_warning(wrong + 1, max_wrong)
+            raw = input("Connection guess (4 numbers): ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            if raw.casefold() in {"quit", "q", "exit"}:
+                print("Leaving Move-Chain Connections.")
+                return False
+
+            parts = raw.replace(",", " ").split()
+            if len(parts) != 4 or any(not p.isdigit() for p in parts):
+                print('Enter exactly four numbers, e.g. "4 5 10 13".')
+                continue
+            nums = [int(p) for p in parts]
+            if len(set(nums)) != 4:
+                print("Numbers must be distinct.")
+                continue
+            if any(n < 1 or n > 16 for n in nums):
+                print("Numbers must be between 1 and 16.")
+                continue
+            pick_idx = [n - 1 for n in nums]
+            pick_set = frozenset(pick_idx)
+            if pick_set in prior_guesses:
+                print("You already tried that exact set.")
+                continue
+            prior_guesses.add(pick_set)
+
+            group_ids = [move_to_group[ch.grid_moves[i]] for i in pick_idx]
+            # Block mixing solved/unsolved guesses for consistency.
+            if any(g in solved for g in group_ids) and not all(g in solved for g in group_ids):
+                print("Use unsolved moves when attempting a new connection.")
+                continue
+
+            # exact connection of an unsolved group
+            found = None
+            for gi, g in enumerate(ch.groups):
+                if gi in solved:
+                    continue
+                target = frozenset(ch.grid_moves.index(m) for m in g.moves)
+                if pick_set == target:
+                    found = gi
+                    break
+            if found is not None:
+                solved.add(found)
+                print(f"{dark_blue}Connection found!{reset}")
+                bgm.play_completion_sound()
+                continue
+
+            # one-off check: 3 from one unsolved group + 1 from elsewhere
+            one_off = False
+            for gi, g in enumerate(ch.groups):
+                if gi in solved:
+                    continue
+                target = frozenset(ch.grid_moves.index(m) for m in g.moves)
+                if len(pick_set & target) == 3:
+                    one_off = True
+                    break
+            if one_off:
+                print(f"{orange}One off.{reset}")
+            _wrong_guess_feedback()
+            wrong += 1
+
+        if len(solved) == 4:
+            print("You solved all connections!")
+            return True
+
+        print("Out of wrong guesses.")
+        print("Groups were:")
+        for g in ch.groups:
+            print(f"- {g.label}: {', '.join(display_connection_move_name(m) for m in g.moves)}")
+        return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3547,6 +3674,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "41) Mastermind")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "42) War")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "44) Move-Chain Connections")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3641,6 +3769,8 @@ def main() -> None:
                 _route_bgm_after_game(run_war(settings))
             elif choice == "43":
                 _route_bgm_after_game(run_stamina_hangman(settings))
+            elif choice == "44":
+                _route_bgm_after_game(run_move_chain_connections(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
