@@ -20,6 +20,10 @@ from pokequiz.games.defensive_profile import defensive_types_for_name, grouped_m
 from pokequiz.games.dexacted import dex_entries_for_name
 from pokequiz.games.ev_forensic import ev_yield_line as ev_forensic_ev_yield_line
 from pokequiz.games.ev_forensic import profile_for_name as ev_forensic_profile_for_name
+from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
+from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
+from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
+from pokequiz.games.exp_yield import reveal_line as exp_yield_reveal_line
 from pokequiz.games.growth_rate_guess import build_challenge as build_growth_rate_challenge
 from pokequiz.games.growth_rate_guess import (
     describe_order,
@@ -1971,6 +1975,76 @@ def run_growth_rate_guesstimate(settings: GameSettings) -> bool | None:
     return False
 
 
+def run_exp_yield(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 2:
+        print("Need at least two Pokémon in the current filter for EXP Yield.")
+        return None
+
+    max_opts = min(8, len(pool))
+    while True:
+        raw = input(f"How many Pokémon choices? (2–{max_opts}, default 2): ").strip()
+        if not raw:
+            n_choices = 2
+            break
+        if raw.isdigit() and 2 <= int(raw) <= max_opts:
+            n_choices = int(raw)
+            break
+        print(f"Enter a whole number from 2 to {max_opts}.")
+
+    c = build_exp_yield_challenge(pool, n_choices)
+    if c is None:
+        print(
+            "Could not build a round (API issue, or could not find that many species with "
+            "distinct base experience). Try fewer choices or widen filters."
+        )
+        return None
+
+    n = len(c.names)
+    max_guesses = _input_guess_count("How many guesses for EXP Yield?", 3)
+    print()
+    print("EXP Yield (no mid-round hints).")
+    print(exp_yield_prompt_line(c))
+    print(pick_help_line(n))
+    for letter, name in zip(letter_labels(n), c.names, strict=True):
+        print(f"  {letter}) {name}")
+    print()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Guess {turn}/{max_guesses}: ")
+        if not raw.strip():
+            print("Guess cannot be blank.")
+            continue
+        if raw.strip().casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving EXP Yield. Answer: {c.names[c.correct_index]}.")
+            for i in range(n):
+                print(f"  {exp_yield_reveal_line(c, i)}")
+            return False
+
+        idx = exp_yield_resolve_pick(raw, dex, c)
+        if idx is None:
+            print(f"Could not parse. {pick_help_line(n)}")
+            continue
+
+        if idx == c.correct_index:
+            print("Correct!")
+            for i in range(n):
+                print(f"  {exp_yield_reveal_line(c, i)}")
+            bgm.play_completion_sound()
+            return True
+
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. Answer: {c.names[c.correct_index]}.")
+    for i in range(n):
+        print(f"  {exp_yield_reveal_line(c, i)}")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2024,6 +2098,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "20) EV Forensic")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "21) International Names")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "22) Growth Rate Guesstimate")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "23) EXP Yield")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2076,6 +2151,8 @@ def main() -> None:
                 _route_bgm_after_game(run_international_names(settings))
             elif choice == "22":
                 _route_bgm_after_game(run_growth_rate_guesstimate(settings))
+            elif choice == "23":
+                _route_bgm_after_game(run_exp_yield(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

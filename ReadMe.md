@@ -118,6 +118,9 @@ Guess the English species name from PokéAPI `ja-roma` (romanized Japanese), wit
 ### 22) Growth Rate Guesstimate
 Three species are shown as A/B/C. Each round asks you to order them either **slowest → fastest** or **fastest → slowest** leveling, using total experience at level 100 from PokéAPI growth-rate data. Submit **one line with all three** (e.g. `B C A`, or three names/letters), with no mid-round hints.
 
+### 23) EXP Yield
+You choose how many species to compare (2–8, capped by your current filter). Each round asks which gives the **most** or **least** base experience when defeated, using the PokéAPI **base_experience** field (in-game reward scales with level). All listed species have distinct base experience so there is a single correct answer. No mid-round hints.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
