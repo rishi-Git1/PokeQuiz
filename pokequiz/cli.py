@@ -73,6 +73,16 @@ from pokequiz.games.zmove_signature import (
     build_challenge as build_zmove_signature_challenge,
     parse_guess as parse_zmove_signature_guess,
 )
+from pokequiz.games.nature_flavor_matrix import (
+    build_challenge as build_nature_flavor_matrix_challenge,
+    display_flavor_name as display_nature_flavor_name,
+    parse_flavor_guess as parse_nature_flavor_guess,
+)
+from pokequiz.games.metronome_blacklist import (
+    build_challenge as build_metronome_blacklist_challenge,
+    display_move_line as display_metronome_move_line,
+    parse_yes_no_guess as parse_metronome_yes_no_guess,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -124,6 +134,8 @@ LAST_STAT_QUIZ: str | None = None
 _DEX_IT_SESSION_BEST: int = 0
 # Best correct streak in Power Levels (mode 25) for this process; resets when the app exits.
 _POWER_LEVELS_SESSION_BEST: int = 0
+# Best correct streak in Metronome Blacklist (mode 37) for this process; resets when app exits.
+_METRONOME_SESSION_BEST: int = 0
 _TYPE_COLOR_PATCHED = False
 _PLAIN_TERMINAL_PRINT: Callable[..., None] = builtins.print
 
@@ -2814,6 +2826,112 @@ def run_zmove_signature(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_nature_flavor_matrix(_settings: GameSettings) -> bool | None:
+    ch = build_nature_flavor_matrix_challenge()
+    if ch is None:
+        print("Could not build Nature-Flavor Matrix round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Nature-Flavor Matrix?", 2)
+    print()
+    print("Nature-Flavor Matrix: answer the berry flavor for the shown nature prompt.")
+    prompt = "likes" if ch.ask_likes else "dislikes"
+    print(f'Prompt: A Pokémon with a {ch.nature_name} Nature {prompt} which flavor?')
+    print("Commands: quit")
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Flavor ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Nature-Flavor Matrix. Answer was "
+                f"{display_nature_flavor_name(ch.answer_flavor)}."
+            )
+            return False
+        canon = parse_nature_flavor_guess(raw)
+        if canon is None:
+            print(f'Unknown flavor: "{raw}". Use Spicy, Sour, Dry, Bitter, or Sweet.')
+            continue
+        if canon in seen:
+            print(f'You already guessed "{display_nature_flavor_name(canon)}".')
+            continue
+        seen.add(canon)
+        if canon == ch.answer_flavor:
+            print(f"Correct! It was {display_nature_flavor_name(ch.answer_flavor)}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(
+        "Out of guesses. Answer was "
+        f"{display_nature_flavor_name(ch.answer_flavor)}."
+    )
+    return False
+
+
+def run_metronome_blacklist(_settings: GameSettings) -> bool | None:
+    global _METRONOME_SESSION_BEST
+
+    max_guesses = 1
+    print()
+    print('Metronome Blacklist: answer "Yes" or "No" if Metronome can call this move.')
+    print(f"Session high score (best streak this app run): {_METRONOME_SESSION_BEST}")
+    print("Commands: quit")
+    streak = 0
+
+    while True:
+        ch = build_metronome_blacklist_challenge()
+        print(f"\nMove: {display_metronome_move_line(ch.move_slug)}")
+        turn = 1
+        while turn <= max_guesses:
+            _last_guess_warning(turn, max_guesses)
+            raw = input("Callable by Metronome? [y/n or quit]: ").strip()
+            if not raw:
+                print("Guess cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                ans = "Yes" if ch.callable_by_metronome else "No"
+                print(f"Leaving Metronome Blacklist. Answer was {ans}.")
+                if streak > 0:
+                    print(f"Final streak: {streak}. Session high: {_METRONOME_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_METRONOME_SESSION_BEST}.")
+                return False
+            yn = parse_metronome_yes_no_guess(raw)
+            if yn is None:
+                print(f'Unknown answer: "{raw}". Use Yes/No or Y/N.')
+                continue
+            if yn == ch.callable_by_metronome:
+                streak += 1
+                old_best = _METRONOME_SESSION_BEST
+                _METRONOME_SESSION_BEST = max(_METRONOME_SESSION_BEST, streak)
+                if streak > old_best:
+                    print(f'Correct! It was {"Yes" if ch.callable_by_metronome else "No"}. New session high: {_METRONOME_SESSION_BEST}!')
+                else:
+                    print(
+                        f'Correct! It was {"Yes" if ch.callable_by_metronome else "No"}. '
+                        f"Streak: {streak} | Session high: {_METRONOME_SESSION_BEST}"
+                    )
+                bgm.play_completion_sound()
+            else:
+                _wrong_guess_feedback()
+                print(f'Answer was {"Yes" if ch.callable_by_metronome else "No"}.')
+                if streak > 0:
+                    print(f"Streak ended at {streak}. Session high: {_METRONOME_SESSION_BEST}.")
+                else:
+                    print(f"Session high: {_METRONOME_SESSION_BEST}.")
+                streak = 0
+            break
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2880,6 +2998,8 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "33) Method Man")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "34) Characteristic Decoder")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, '35) "Z-Move" Signature')
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "36) Nature-Flavor Matrix")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "37) Metronome Blacklist")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2958,6 +3078,10 @@ def main() -> None:
                 _route_bgm_after_game(run_characteristic_decoder(settings))
             elif choice == "35":
                 _route_bgm_after_game(run_zmove_signature(settings))
+            elif choice == "36":
+                _route_bgm_after_game(run_nature_flavor_matrix(settings))
+            elif choice == "37":
+                _route_bgm_after_game(run_metronome_blacklist(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

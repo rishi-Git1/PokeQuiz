@@ -157,6 +157,12 @@ Given a Pokémon **Characteristic** (from the PokéAPI characteristic endpoint),
 ### 35) "Z-Move" Signature
 Given a **signature Z-Move** name, guess the Pokémon it belongs to (for example, `Oceanic Operetta` -> `Primarina`). No clues in this mode. Configurable guess count (defaults to 3); unknown or repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
 
+### 36) Nature-Flavor Matrix
+Given a **Nature**, answer which flavor the Pokémon **likes** or **dislikes** (Nature -> increased/decreased stat -> flavor mapping). No clues in this mode. Configurable guess count (defaults to 2); unknown flavor text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
+### 37) Metronome Blacklist
+Given a **move**, answer `Yes`/`No` on whether Metronome can call it. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Accepts `y/n` or `yes/no`. No clues; unknown input does not consume turns; standard wrong/completion audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
