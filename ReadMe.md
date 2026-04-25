@@ -133,6 +133,9 @@ Guess an **ability** from its English **mechanical effect** text (PokéAPI `effe
 ### 27) Item Lore
 Guess an **item** from English **flavor text** (PokéAPI `flavor_text_entries`). The first line is shown with the **item name** redacted; **clue** adds the next distinct English line when available. Configurable guess count; **last-guess** warning and **loser** BGM match other guess modes.
 
+### 28) Move Match
+Guess a **move** from redacted English move descriptions. The round starts with the move's **short effect**; `clue` reveals the **full effect** first, then additional Pokédex-style move flavor text lines when available. Move names are redacted in the clue text. Configurable guess count; invalid/repeat move guesses do not consume turns; last-guess warning and loser BGM match other guess modes.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
@@ -145,6 +148,7 @@ Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets
 **Sound effects**
 
 - **Input blip** (each line submitted) — `pokedex_select.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_INPUT_SFX`. Volume: `POKEQUIZ_INPUT_SFX_VOLUME`.
+- **Wrong guess** — `incorrect.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_INCORRECT_SFX`. Volume: `POKEQUIZ_INCORRECT_SFX_VOLUME`.
 - **Win / completion** — `completion.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_COMPLETION_SFX`. Volume: `POKEQUIZ_COMPLETION_SFX_VOLUME`.
 - **Last-guess warning** — `low_health.wav` / `.ogg` / `.mp3`. Override: `POKEQUIZ_LOW_HEALTH_SFX`. Volume: `POKEQUIZ_LOW_HEALTH_SFX_VOLUME`.
 - **Shiny menu jingle** — `shiny_jingle.wav` / `.ogg` / `.mp3`; on startup, a random “shiny” colored menu and this jingle can trigger (~1 in 10) when the file exists (there is no separate mute for it in settings). Override: `POKEQUIZ_SHINY_JINGLE_SFX`. Volume: `POKEQUIZ_SHINY_JINGLE_VOLUME`.

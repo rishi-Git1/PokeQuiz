@@ -522,7 +522,12 @@ def _input_with_select_sound(prompt: str = "") -> str:
     line = _original_input(prompt)
     # Guess submissions use dedicated correct/incorrect SFX in CLI mode handlers.
     lower_prompt = (prompt or "").casefold()
-    if "guess" in lower_prompt or "ability (" in lower_prompt or "item (" in lower_prompt:
+    if (
+        "guess" in lower_prompt
+        or "ability (" in lower_prompt
+        or "item (" in lower_prompt
+        or "move (" in lower_prompt
+    ):
         return line
     play_pokedex_select_sound()
     return line

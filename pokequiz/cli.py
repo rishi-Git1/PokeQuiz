@@ -34,6 +34,13 @@ from pokequiz.games.item_lore import (
     item_slug_from_user_guess,
     redact_for_item,
 )
+from pokequiz.games.move_match import (
+    build_challenge as build_move_match_challenge,
+    display_move_name as display_move_match_name,
+    ensure_move_guess_index,
+    move_slug_from_user_guess,
+    redact_for_move,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2352,6 +2359,62 @@ def run_item_lore(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_move_match(_settings: GameSettings) -> bool | None:
+    ch = build_move_match_challenge()
+    if ch is None:
+        print("Could not build Move Match round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Move Match?", 5)
+    ensure_move_guess_index()
+    print()
+    print("Move Match: name the move from its English mechanical description.")
+    print("The move name is redacted in the text.")
+    print("Commands: clue (next English effect entry, if any), quit")
+    revealed_count = 0
+    print(f"Effect {revealed_count + 1}/{len(ch.descriptions)}:")
+    print(redact_for_move(ch.descriptions[revealed_count], move_slug=ch.move_slug))
+    revealed_count = 1
+    wrong_slugs: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Move ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Move Match. The move was {display_move_match_name(ch.move_slug)}.")
+            return False
+        if raw.casefold() in {"clue", "c", "hint"}:
+            if revealed_count >= len(ch.descriptions):
+                print("No more English effect descriptions available.")
+            else:
+                print(f"Effect {revealed_count + 1}/{len(ch.descriptions)}:")
+                print(redact_for_move(ch.descriptions[revealed_count], move_slug=ch.move_slug))
+                revealed_count += 1
+            continue
+
+        canon = move_slug_from_user_guess(raw)
+        if canon is None:
+            print("That doesn't match a known Pokédex move (check spelling).")
+            continue
+        if canon == ch.move_slug:
+            print(f"Correct! It was {display_move_match_name(ch.move_slug)}.")
+            bgm.play_completion_sound()
+            return True
+        if canon in wrong_slugs:
+            print("You already guessed that move.")
+            continue
+        wrong_slugs.add(canon)
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(f"Out of guesses. The move was {display_move_match_name(ch.move_slug)}.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2410,6 +2473,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "25) Power Levels")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "26) Ability Effects")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "27) Item Lore")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "28) Move Match")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2472,6 +2536,8 @@ def main() -> None:
                 _route_bgm_after_game(run_ability_effects(settings))
             elif choice == "27":
                 _route_bgm_after_game(run_item_lore(settings))
+            elif choice == "28":
+                _route_bgm_after_game(run_move_match(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
