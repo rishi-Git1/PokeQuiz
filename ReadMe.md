@@ -121,6 +121,12 @@ Three species are shown as A/B/C. Each round asks you to order them either **slo
 ### 23) EXP Yield
 You choose how many species to compare (2–8, capped by your current filter). Each round asks which gives the **most** or **least** base experience when defeated, using the PokéAPI **base_experience** field (in-game reward scales with level). All listed species have distinct base experience so there is a single correct answer. No mid-round hints.
 
+### 24) DexIt
+A **higher / lower** run on **National Pokédex** numbers. You see a **Target** (with #) and a **Guess** (name only), and say whether the Guess’s Dex number is higher or lower than the Target’s. After a **correct** answer, the **Guess** becomes the next **Target**, and a new random species is drawn as the next **Guess** (so a correct call on Pikachu vs Dipplin leads into Dipplin vs the next Pokémon). A wrong answer breaks the chain and the next round starts from two fresh random species. A **session high score** (best correct streak) is shown when you open this mode. No “loser” BGM and no last-guess warning in this mode; completion SFX still plays on each correct answer (unless muted in settings).
+
+### 25) Power Levels
+Same **chained higher / lower** idea as DexIt, but using **base stat total (BST)** from the minidex (sum of base HP, Attack, Defense, Special Attack, Special Defense, and Speed). The Target shows **BST**; you compare the Guess’s BST to the Target’s. Session high score, audio behavior, and chain/reset rules match DexIt.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

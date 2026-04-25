@@ -20,6 +20,11 @@ from pokequiz.games.defensive_profile import defensive_types_for_name, grouped_m
 from pokequiz.games.dexacted import dex_entries_for_name
 from pokequiz.games.ev_forensic import ev_yield_line as ev_forensic_ev_yield_line
 from pokequiz.games.ev_forensic import profile_for_name as ev_forensic_profile_for_name
+from pokequiz.games.dexit import is_correct_guess as dex_it_is_correct
+from pokequiz.games.dexit import parse_higher_lower, pick_next_guess, pick_target_and_guess
+from pokequiz.games.power_levels import is_correct_guess as power_levels_is_correct
+from pokequiz.games.power_levels import pick_next_guess as power_levels_pick_next
+from pokequiz.games.power_levels import pick_target_and_guess as power_levels_pick_pair
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -67,6 +72,10 @@ from pokequiz.games.statle import (
 from pokequiz.models import GameSettings, Pokemon
 
 LAST_STAT_QUIZ: str | None = None
+# Best correct streak in DexIt (mode 24) for this process; resets when the app exits.
+_DEX_IT_SESSION_BEST: int = 0
+# Best correct streak in Power Levels (mode 25) for this process; resets when the app exits.
+_POWER_LEVELS_SESSION_BEST: int = 0
 _TYPE_COLOR_PATCHED = False
 _PLAIN_TERMINAL_PRINT: Callable[..., None] = builtins.print
 
@@ -2045,6 +2054,160 @@ def run_exp_yield(settings: GameSettings) -> bool | None:
     return False
 
 
+def run_dex_it(settings: GameSettings) -> None:
+    """DexIt: higher/lower on National Dex; chains so the last correct Guess becomes the next Target. No loser BGM, no last-guess SFX; not routed through `_route_bgm_after_game`."""
+    global _DEX_IT_SESSION_BEST
+
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 2:
+        print("Need at least two Pokémon in the current filter for DexIt.")
+        return
+
+    print()
+    print("DexIt — is the Guess’s National Dex # higher or lower than the Target’s?")
+    print("After a correct answer, the next round compares that Pokémon to a new random species.")
+    print(f"Session high score (best streak this app run): {_DEX_IT_SESSION_BEST}")
+    print("h = higher, l = lower, quit = main menu. (No last-guess warning in this mode.)")
+    print()
+
+    anchor: Pokemon | None = None
+    streak = 0
+    while True:
+        if anchor is None:
+            pair = pick_target_and_guess(pool)
+            if pair is None:
+                print("Could not build a round (need two species with different Dex numbers in the pool).")
+                return
+            target, guess = pair
+        else:
+            guess = pick_next_guess(anchor, pool)
+            if guess is None:
+                print("No other species in the current filter to chain; starting a fresh pair.")
+                anchor = None
+                continue
+            target = anchor
+
+        print(f"Target: {target.name} (#{target.dex_number})")
+        print(f"Guess:  {guess.name}")
+        print()
+        print(f"Is {guess.name}'s National Dex number higher or lower than {target.name}'s?")
+
+        while True:
+            raw = input("> ").strip()
+            if not raw:
+                print("Type h (higher) or l (lower), or quit to leave.")
+                continue
+            if raw.casefold() in {"quit", "q", "exit", "back"}:
+                print("Leaving DexIt.")
+                return
+            answer = parse_higher_lower(raw)
+            if answer is None:
+                print("Type h (higher) or l (lower), or quit to leave.")
+                continue
+            break
+
+        if dex_it_is_correct(answer, target, guess):
+            streak += 1
+            old_best = _DEX_IT_SESSION_BEST
+            _DEX_IT_SESSION_BEST = max(_DEX_IT_SESSION_BEST, streak)
+            if streak > old_best:
+                print(f"Correct! New session high score: {_DEX_IT_SESSION_BEST}!")
+            else:
+                print(f"Correct! Streak: {streak}  |  Session high: {_DEX_IT_SESSION_BEST}")
+            bgm.play_completion_sound()
+            anchor = guess
+        else:
+            print(
+                f"Wrong! {guess.name} is #{guess.dex_number}, {target.name} is #{target.dex_number}."
+            )
+            if streak > 0:
+                print(f"Streak ended at {streak}. Session high: {_DEX_IT_SESSION_BEST}.")
+            else:
+                print(f"Session high: {_DEX_IT_SESSION_BEST}.")
+            streak = 0
+            anchor = None
+
+        print()
+
+
+def run_power_levels(settings: GameSettings) -> None:
+    """Power Levels: higher/lower on BST; chains like DexIt. No loser BGM, no last-guess SFX; not routed through `_route_bgm_after_game`."""
+    global _POWER_LEVELS_SESSION_BEST
+
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 2:
+        print("Need at least two Pokémon in the current filter for Power Levels.")
+        return
+
+    print()
+    print("Power Levels — is the Guess’s base stat total (BST) higher or lower than the Target’s?")
+    print("After a correct answer, the next round compares that Pokémon to a new random species.")
+    print(f"Session high score (best streak this app run): {_POWER_LEVELS_SESSION_BEST}")
+    print("h = higher, l = lower, quit = main menu. (No last-guess warning in this mode.)")
+    print()
+
+    anchor: Pokemon | None = None
+    streak = 0
+    while True:
+        if anchor is None:
+            pair = power_levels_pick_pair(pool)
+            if pair is None:
+                print("Could not build a round (need two species with different base stat totals in the pool).")
+                return
+            target, guess = pair
+        else:
+            guess = power_levels_pick_next(anchor, pool)
+            if guess is None:
+                print("No other species in the current filter to chain; starting a fresh pair.")
+                anchor = None
+                continue
+            target = anchor
+
+        print(f"Target: {target.name} (BST {target.bst})")
+        print(f"Guess:  {guess.name}")
+        print()
+        print(f"Is {guess.name}'s base stat total (BST) higher or lower than {target.name}'s?")
+
+        while True:
+            raw = input("> ").strip()
+            if not raw:
+                print("Type h (higher) or l (lower), or quit to leave.")
+                continue
+            if raw.casefold() in {"quit", "q", "exit", "back"}:
+                print("Leaving Power Levels.")
+                return
+            answer = parse_higher_lower(raw)
+            if answer is None:
+                print("Type h (higher) or l (lower), or quit to leave.")
+                continue
+            break
+
+        if power_levels_is_correct(answer, target, guess):
+            streak += 1
+            old_best = _POWER_LEVELS_SESSION_BEST
+            _POWER_LEVELS_SESSION_BEST = max(_POWER_LEVELS_SESSION_BEST, streak)
+            if streak > old_best:
+                print(f"Correct! New session high score: {_POWER_LEVELS_SESSION_BEST}!")
+            else:
+                print(f"Correct! Streak: {streak}  |  Session high: {_POWER_LEVELS_SESSION_BEST}")
+            bgm.play_completion_sound()
+            anchor = guess
+        else:
+            print(
+                f"Wrong! {guess.name} has BST {guess.bst}, {target.name} has BST {target.bst}."
+            )
+            if streak > 0:
+                print(f"Streak ended at {streak}. Session high: {_POWER_LEVELS_SESSION_BEST}.")
+            else:
+                print(f"Session high: {_POWER_LEVELS_SESSION_BEST}.")
+            streak = 0
+            anchor = None
+
+        print()
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2099,6 +2262,8 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "21) International Names")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "22) Growth Rate Guesstimate")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "23) EXP Yield")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "24) DexIt")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "25) Power Levels")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2153,6 +2318,10 @@ def main() -> None:
                 _route_bgm_after_game(run_growth_rate_guesstimate(settings))
             elif choice == "23":
                 _route_bgm_after_game(run_exp_yield(settings))
+            elif choice == "24":
+                run_dex_it(settings)
+            elif choice == "25":
+                run_power_levels(settings)
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
