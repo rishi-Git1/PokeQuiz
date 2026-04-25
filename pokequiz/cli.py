@@ -42,6 +42,12 @@ from pokequiz.games.move_match import (
     redact_for_move,
 )
 from pokequiz.games.machine_serial import build_challenge as build_machine_serial_challenge
+from pokequiz.games.fling_force import (
+    build_challenge as build_fling_force_challenge,
+    clue_line as fling_force_clue_line,
+    parse_guess as fling_force_parse_guess,
+    reveal_answer_line as fling_force_reveal_answer_line,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2476,6 +2482,61 @@ def run_machine_serial(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_fling_force(_settings: GameSettings) -> bool | None:
+    ch = build_fling_force_challenge()
+    if ch is None:
+        print("Could not build Fling Force round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Fling Force?", 5)
+    print()
+    print("Fling Force: given an item, guess its Fling power or Fling status effect.")
+    print(f"Item: {display_item_name(ch.item_slug)}")
+    print("Commands: clue (single manual clue), quit")
+    clue_revealed = False
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Answer ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Fling Force. Accepted answer was "
+                f"{fling_force_reveal_answer_line(ch)}."
+            )
+            return False
+        if cmd in {"clue", "c", "hint"}:
+            if clue_revealed:
+                print("No more clues available.")
+            else:
+                print(fling_force_clue_line(ch))
+                clue_revealed = True
+            continue
+
+        ok, key = fling_force_parse_guess(raw, ch)
+        if not key:
+            print("Enter either an integer power or a status/effect word.")
+            continue
+        if key in seen:
+            print("You already guessed that.")
+            continue
+        seen.add(key)
+        if ok:
+            print(f"Correct! Accepted: {fling_force_reveal_answer_line(ch)}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(f"Out of guesses. Accepted answer was {fling_force_reveal_answer_line(ch)}.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2536,6 +2597,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "27) Item Lore")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "28) Move Match")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "29) Machine Serial")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "30) Fling Force")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2602,6 +2664,8 @@ def main() -> None:
                 _route_bgm_after_game(run_move_match(settings))
             elif choice == "29":
                 _route_bgm_after_game(run_machine_serial(settings))
+            elif choice == "30":
+                _route_bgm_after_game(run_fling_force(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
