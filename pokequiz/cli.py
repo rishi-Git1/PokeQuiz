@@ -69,6 +69,10 @@ from pokequiz.games.characteristic_decoder import (
     display_stat_name as display_characteristic_stat_name,
     parse_stat_guess as parse_characteristic_stat_guess,
 )
+from pokequiz.games.zmove_signature import (
+    build_challenge as build_zmove_signature_challenge,
+    parse_guess as parse_zmove_signature_guess,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2771,6 +2775,45 @@ def run_characteristic_decoder(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_zmove_signature(_settings: GameSettings) -> bool | None:
+    ch = build_zmove_signature_challenge()
+    max_guesses = _input_guess_count('How many guesses for "Z-Move" Signature?', 3)
+    print()
+    print('"Z-Move" Signature: name the Pokémon that this signature Z-Move belongs to.')
+    print(f"Prompt: {ch.zmove_name}")
+    print("Commands: quit")
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Pokémon ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f'Leaving "Z-Move" Signature. Answer was {ch.pokemon_name}.')
+            return False
+        ok, key, err = parse_zmove_signature_guess(raw, ch)
+        if not key:
+            print(err or f'Could not parse "{raw}".')
+            continue
+        if key in seen:
+            print(f'You already guessed "{raw}".')
+            continue
+        seen.add(key)
+        if ok:
+            print(f"Correct! It was {ch.pokemon_name}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(f'Out of guesses. Answer was {ch.pokemon_name}.')
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2836,6 +2879,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "32) Environment Map")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "33) Method Man")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "34) Characteristic Decoder")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, '35) "Z-Move" Signature')
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2912,6 +2956,8 @@ def main() -> None:
                 _route_bgm_after_game(run_method_man(settings))
             elif choice == "34":
                 _route_bgm_after_game(run_characteristic_decoder(settings))
+            elif choice == "35":
+                _route_bgm_after_game(run_zmove_signature(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
