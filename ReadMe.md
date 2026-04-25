@@ -169,7 +169,7 @@ Given a **Pokémon** and its six base-stat values in scrambled order, answer whi
 ### 39) Catch & Hatch
 Given a **Pokémon** and two values (`Capture Rate` and `Base Happiness`) in shuffled order, identify which value is the **Capture Rate**. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Invalid numbers or numbers outside the shown pair do not consume turns; standard wrong/completion audio behavior applies.
 
-### 40) Sell
+### 40) Selling Out
 Given a Poké Ball-category **item**, answer its **sell price** (half of buy cost from PokéAPI `cost`). `Master Ball` and `Luxury Ball` are excluded from this mode. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numeric input does not consume turns; standard wrong/completion audio behavior applies.
 
 ### 41) Mastermind

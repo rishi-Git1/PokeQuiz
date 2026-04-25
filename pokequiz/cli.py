@@ -159,7 +159,7 @@ _CATCH_HATCH_SESSION_BEST: int = 0
 _METHOD_MAN_SESSION_BEST: int = 0
 # Best correct streak in Stat Scramble (mode 38) for this process; resets when app exits.
 _STAT_SCRAMBLE_SESSION_BEST: int = 0
-# Best correct streak in Sell (mode 40) for this process; resets when app exits.
+# Best correct streak in Selling Out (mode 40) for this process; resets when app exits.
 _SELL_SESSION_BEST: int = 0
 _TYPE_COLOR_PATCHED = False
 _PLAIN_TERMINAL_PRINT: Callable[..., None] = builtins.print
@@ -3132,7 +3132,7 @@ def run_sell_quiz(_settings: GameSettings) -> bool | None:
 
     max_guesses = 1
     print()
-    print("Sell: estimate an item's sell price (half of buy cost).")
+    print("Selling Out: estimate an item's sell price (half of buy cost).")
     print(f"Session high score (best streak this app run): {_SELL_SESSION_BEST}")
     print("Commands: quit")
     streak = 0
@@ -3140,20 +3140,20 @@ def run_sell_quiz(_settings: GameSettings) -> bool | None:
     while True:
         ch = build_sell_challenge()
         if ch is None:
-            print("Could not build Sell round (API issue). Try again.")
+            print("Could not build Selling Out round (API issue). Try again.")
             return None
         print(f"\nQuestion: What is the sell price of {display_sell_item_name(ch.item_slug)}?")
         turn = 1
         while turn <= max_guesses:
             _last_guess_warning(turn, max_guesses)
-            raw = input("Sell price [single guess or quit]: ").strip()
+            raw = input("Selling Out price [single guess or quit]: ").strip()
             if not raw:
                 print("Guess cannot be blank.")
                 continue
             cmd = raw.casefold()
             if cmd in {"quit", "q", "exit"}:
                 print(
-                    "Leaving Sell. "
+                    "Leaving Selling Out. "
                     f"{display_sell_item_name(ch.item_slug)} buy cost is {ch.buy_cost}, so sell price is {ch.sell_price}."
                 )
                 if streak > 0:
@@ -3670,7 +3670,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "37) Metronome Blacklist")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "38) Stat Scramble")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "39) Catch & Hatch")
-            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Sell")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Selling Out")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "41) Mastermind")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "42) War")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
