@@ -172,6 +172,9 @@ Given a **Pokémon** and two values (`Capture Rate` and `Base Happiness`) in shu
 ### 40) Sell
 Given a Poké Ball-category **item**, answer its **sell price** (half of buy cost from PokéAPI `cost`). `Master Ball` and `Luxury Ball` are excluded from this mode. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numeric input does not consume turns; standard wrong/completion audio behavior applies.
 
+### 41) Mastermind
+Guess a hidden **two-slot type combination** in **9 attempts**. Each guess returns exactly two feedback colors, prioritized as **Green**, then **Yellow**, then **Gray** (`Green` = right type/right slot, `Yellow` = right type/wrong slot, `Gray` = type not present). No clues in this mode. Illegal guesses (unknown type, duplicate type) and repeated guesses do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

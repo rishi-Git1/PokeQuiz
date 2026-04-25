@@ -87,6 +87,13 @@ from pokequiz.games.stat_scramble import build_challenge as build_stat_scramble_
 from pokequiz.games.catch_hatch import build_challenge as build_catch_hatch_challenge
 from pokequiz.games.sell_quiz import build_challenge as build_sell_challenge
 from pokequiz.games.sell_quiz import display_item_name as display_sell_item_name
+from pokequiz.games.mastermind_types import (
+    build_challenge as build_mastermind_challenge,
+    feedback_colors as mastermind_feedback_colors,
+    format_guess as format_mastermind_guess,
+    parse_guess as parse_mastermind_guess,
+    display_type_name as display_mastermind_type_name,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3182,6 +3189,61 @@ def run_sell_quiz(_settings: GameSettings) -> bool | None:
             break
 
 
+def run_mastermind(_settings: GameSettings) -> bool | None:
+    ch = build_mastermind_challenge()
+    max_guesses = 9
+    color_map = {
+        "Green": "\x1b[32mGreen\x1b[0m",
+        "Yellow": "\x1b[33mYellow\x1b[0m",
+        "Gray": "\x1b[90mGray\x1b[0m",
+    }
+    print()
+    print("Mastermind: guess the hidden two-slot type combination.")
+    print("Feedback uses exactly two colors each round, prioritized Green > Yellow > Gray.")
+    print("Input format: type1 type2 (example: water ground). Commands: quit")
+    seen: set[tuple[str, str]] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Type guess ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Mastermind. Secret was "
+                f"{display_mastermind_type_name(ch.secret[0])} / {display_mastermind_type_name(ch.secret[1])}."
+            )
+            return False
+
+        guess, err = parse_mastermind_guess(raw)
+        if guess is None:
+            print(err or "Invalid guess.")
+            continue
+        if guess in seen:
+            print(f'You already guessed "{format_mastermind_guess(guess)}".')
+            continue
+        seen.add(guess)
+
+        if guess == ch.secret:
+            print(f"Correct! Secret was {format_mastermind_guess(ch.secret)}.")
+            bgm.play_completion_sound()
+            return True
+
+        c1, c2 = mastermind_feedback_colors(ch.secret, guess)
+        print(f"Feedback: {color_map.get(c1, c1)}, {color_map.get(c2, c2)}")
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(
+        "Out of guesses. Secret was "
+        f"{display_mastermind_type_name(ch.secret[0])} / {display_mastermind_type_name(ch.secret[1])}."
+    )
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3253,6 +3315,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "38) Stat Scramble")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "39) Catch & Hatch")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Sell")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "41) Mastermind")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3341,6 +3404,8 @@ def main() -> None:
                 _route_bgm_after_game(run_catch_hatch(settings))
             elif choice == "40":
                 _route_bgm_after_game(run_sell_quiz(settings))
+            elif choice == "41":
+                _route_bgm_after_game(run_mastermind(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
