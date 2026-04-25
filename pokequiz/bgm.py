@@ -1,4 +1,4 @@
-"""Optional terminal audio: menu BGM, input blip, last-guess warning, and win stinger."""
+"""Optional terminal audio: menu BGM plus input/correct/incorrect warning SFX."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ _input_hook_installed = False
 _select_sound = None  # pygame.mixer.Sound | None
 _completion_sound = None  # pygame.mixer.Sound | None
 _low_health_sound = None  # pygame.mixer.Sound | None
+_incorrect_sound = None  # pygame.mixer.Sound | None
 _shiny_jingle_sound = None  # pygame.mixer.Sound | None
 
 _mute_bgm = False
@@ -63,6 +64,15 @@ def _default_low_health_paths() -> list[Path]:
         base / "low_health.wav",
         base / "low_health.ogg",
         base / "low_health.mp3",
+    ]
+
+
+def _default_incorrect_paths() -> list[Path]:
+    base = _assets_dir()
+    return [
+        base / "incorrect.wav",
+        base / "incorrect.ogg",
+        base / "incorrect.mp3",
     ]
 
 
@@ -132,6 +142,18 @@ def resolve_low_health_sound() -> Path | None:
     return None
 
 
+def resolve_incorrect_sound() -> Path | None:
+    env = (os.environ.get("POKEQUIZ_INCORRECT_SFX") or "").strip()
+    if env:
+        p = Path(env).expanduser()
+        if p.is_file():
+            return p
+    for candidate in _default_incorrect_paths():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def resolve_loser_bgm_file() -> Path | None:
     env = (os.environ.get("POKEQUIZ_LOSER_BGM") or "").strip()
     if env:
@@ -189,6 +211,15 @@ def _low_health_volume() -> float:
         v = float(raw)
     except ValueError:
         return 0.7
+    return max(0.0, min(1.0, v))
+
+
+def _incorrect_volume() -> float:
+    raw = (os.environ.get("POKEQUIZ_INCORRECT_SFX_VOLUME") or "0.75").strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        return 0.75
     return max(0.0, min(1.0, v))
 
 
@@ -423,6 +454,39 @@ def play_low_health_sound() -> None:
         pass
 
 
+def _load_incorrect_sound() -> None:
+    global _incorrect_sound
+    if _incorrect_sound is not None:
+        return
+    path = resolve_incorrect_sound()
+    if path is None:
+        return
+    pygame = _import_pygame()
+    try:
+        snd = pygame.mixer.Sound(str(path))
+        snd.set_volume(_incorrect_volume())
+        _incorrect_sound = snd
+    except Exception:
+        _incorrect_sound = None
+
+
+def play_incorrect_sound() -> None:
+    """Plays when the player submits a wrong guess in guessing modes."""
+    if _mute_input_sfx:
+        return
+    if resolve_incorrect_sound() is None:
+        return
+    if not ensure_mixer():
+        return
+    _load_incorrect_sound()
+    if _incorrect_sound is None:
+        return
+    try:
+        _incorrect_sound.play()
+    except Exception:
+        pass
+
+
 def _load_shiny_jingle_sound() -> None:
     global _shiny_jingle_sound
     if _shiny_jingle_sound is not None:
@@ -456,6 +520,10 @@ def play_shiny_jingle() -> None:
 
 def _input_with_select_sound(prompt: str = "") -> str:
     line = _original_input(prompt)
+    # Guess submissions use dedicated correct/incorrect SFX in CLI mode handlers.
+    lower_prompt = (prompt or "").casefold()
+    if "guess" in lower_prompt or "ability (" in lower_prompt or "item (" in lower_prompt:
+        return line
     play_pokedex_select_sound()
     return line
 
@@ -486,6 +554,7 @@ def setup_terminal_audio() -> None:
     want_sfx = resolve_pokedex_select_sound() is not None
     want_completion = resolve_completion_sound() is not None
     want_low_health = resolve_low_health_sound() is not None
+    want_incorrect = resolve_incorrect_sound() is not None
     want_shiny_jingle = resolve_shiny_jingle_sound() is not None
     want_loser_bgm = resolve_loser_bgm_file() is not None
     if (
@@ -493,6 +562,7 @@ def setup_terminal_audio() -> None:
         and not want_sfx
         and not want_completion
         and not want_low_health
+        and not want_incorrect
         and not want_shiny_jingle
         and not want_loser_bgm
     ):
@@ -520,6 +590,11 @@ def setup_terminal_audio() -> None:
                 "Tip: for last-guess warning, `pip install pygame` and place low_health.wav/ogg/mp3 "
                 "in pokequiz/assets/ (or set POKEQUIZ_LOW_HEALTH_SFX)."
             )
+        if want_incorrect:
+            print(
+                "Tip: for wrong-guess sound, `pip install pygame` and place incorrect.wav/ogg/mp3 "
+                "in pokequiz/assets/ (or set POKEQUIZ_INCORRECT_SFX)."
+            )
         if want_shiny_jingle:
             print(
                 "Tip: for shiny menu jingle, `pip install pygame` and place shiny_jingle.wav/ogg/mp3 "
@@ -537,7 +612,7 @@ def setup_terminal_audio() -> None:
 
 
 def shutdown_terminal_audio() -> None:
-    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound, _low_health_sound, _shiny_jingle_sound
+    global _input_hook_installed, _mixer_ready, _select_sound, _completion_sound, _low_health_sound, _incorrect_sound, _shiny_jingle_sound
     if _input_hook_installed:
         builtins.input = _original_input
         _input_hook_installed = False
@@ -545,6 +620,7 @@ def shutdown_terminal_audio() -> None:
     _select_sound = None
     _completion_sound = None
     _low_health_sound = None
+    _incorrect_sound = None
     _shiny_jingle_sound = None
     if _mixer_ready:
         try:

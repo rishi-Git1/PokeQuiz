@@ -312,6 +312,11 @@ def _last_guess_warning(turn: int, max_guesses: int) -> None:
         bgm.play_low_health_sound()
 
 
+def _wrong_guess_feedback(message: str = "Nope.") -> None:
+    print(message)
+    bgm.play_incorrect_sound()
+
+
 def _main_menu_print(active: bool, fg_ansi: str, *args: object, **kwargs: Any) -> None:
     """Main menu lines; optional shiny-style random color (bypasses type-color print patch)."""
     if not active:
@@ -489,7 +494,7 @@ def run_stat_quiz(settings: GameSettings) -> bool | None:
             return True
         if hint_turn is not None and tries == hint_turn:
             print(f"Hint: types={','.join(mon.types)} generation={mon.generation}")
-    print(f"Nope. It was {mon.name}.")
+    _wrong_guess_feedback(f"Nope. It was {mon.name}.")
     return False
 
 
@@ -637,7 +642,7 @@ def run_dexacted(settings: GameSettings) -> bool | None:
             if revealed >= len(entries):
                 print(f"Wrong guess and no entries left. You lose. It was {target.name}.")
                 return False
-            print("Nope. Ask for another entry or guess again.")
+            _wrong_guess_feedback("Nope. Ask for another entry or guess again.")
 
 
 def run_movepool_madness(settings: GameSettings) -> bool | None:
@@ -691,9 +696,9 @@ def run_movepool_madness(settings: GameSettings) -> bool | None:
             learned = set(legal_moves_for_name(guess.name))
             missing = [_color_move_name(display_move_name(m), move_slug=m) for m in required_moves if m not in learned]
             if missing:
-                print(f"Nope. {guess.name} is missing: {', '.join(missing)}")
+                _wrong_guess_feedback(f"Nope. {guess.name} is missing: {', '.join(missing)}")
             else:
-                print(f"Nope. {guess.name} does not satisfy the four-move requirement.")
+                _wrong_guess_feedback(f"Nope. {guess.name} does not satisfy the four-move requirement.")
             turn += 1
         except Exception:
             print("Could not validate that guess right now (API issue). Try again.")
@@ -752,7 +757,7 @@ def run_daycare_detective(settings: GameSettings) -> bool | None:
                 print("Correct!")
                 bgm.play_completion_sound()
                 return True
-            print("Nope.")
+            _wrong_guess_feedback()
             turn += 1
 
         print(f"Out of guesses. It was {target.name}.")
@@ -818,7 +823,7 @@ def run_evolutionary_enigma(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-            print("Nope.")
+            _wrong_guess_feedback()
             turn += 1
 
         print(f"Out of guesses. This clue profile included {edge.from_name} -> {edge.to_name}.")
@@ -909,7 +914,7 @@ def run_ability_assessor(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. One matching profile was {target.name}.")
@@ -995,7 +1000,7 @@ def run_level_ladder(settings: GameSettings) -> bool | None:
             print(f"Correct! {guess.name} matches the revealed Level Ladder sequence.")
             bgm.play_completion_sound()
             return True
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. It was {target.name}.")
@@ -1071,7 +1076,7 @@ def run_defensive_profile(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(
@@ -1159,7 +1164,7 @@ def run_safari_zone(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-            print("Nope.")
+            _wrong_guess_feedback()
             turn += 1
 
         print(f"Out of guesses. One matching answer was {target.name}.")
@@ -1232,7 +1237,7 @@ def run_thiefs_target(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-            print("Nope.")
+            _wrong_guess_feedback()
             turn += 1
 
         print(f"Out of guesses. One matching answer was {target.name}.")
@@ -1311,7 +1316,7 @@ def run_odd_one_out(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     odd_name = challenge.names[challenge.odd_index]
@@ -1407,7 +1412,7 @@ def run_category_quiz(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. One matching answer was {target.name}.")
@@ -1514,7 +1519,7 @@ def run_stat_sorter(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     pretty = " -> ".join(f"{m.name} ({getattr(m, stat_key)})" for m in correct_sorted)
@@ -1618,7 +1623,7 @@ def run_level_race(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     details = " -> ".join(f"{m.name} (L{lvl})" for m, lvl in correct_sorted)
@@ -1704,7 +1709,7 @@ def run_missing_link(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(
@@ -1824,7 +1829,7 @@ def run_ev_forensic(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. One matching answer was {target.name}.")
@@ -1929,7 +1934,7 @@ def run_international_names(settings: GameSettings) -> bool | None:
                 bgm.play_completion_sound()
                 return True
 
-            print("Nope.")
+            _wrong_guess_feedback()
             turn += 1
 
         print(f"Out of guesses. The English name was {target.name}.")
@@ -1953,7 +1958,7 @@ def run_growth_rate_guesstimate(settings: GameSettings) -> bool | None:
 
     max_guesses = _input_guess_count("How many guesses for Growth Rate Guesstimate?", 3)
     print()
-    print("Growth Rate Guesstimate (PokéAPI growth-rate curves; no mid-round hints).")
+    print("Growth Rate Guesstimate (no mid-round hints).")
     print(question_line(challenge))
     print("Each guess is one line with all three choices in order (letters, numbers, or names).")
     for letter, name in zip(("A", "B", "C"), challenge.labels, strict=True):
@@ -1984,7 +1989,7 @@ def run_growth_rate_guesstimate(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. Correct order was: {describe_order(challenge, challenge.correct_order)}")
@@ -2054,7 +2059,7 @@ def run_exp_yield(settings: GameSettings) -> bool | None:
             bgm.play_completion_sound()
             return True
 
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. Answer: {c.names[c.correct_index]}.")
@@ -2103,7 +2108,7 @@ def run_dex_it(settings: GameSettings) -> None:
         print(f"Is {guess.name}'s National Dex number higher or lower than {target.name}'s?")
 
         while True:
-            raw = input("> ").strip()
+            raw = input("Guess> ").strip()
             if not raw:
                 print("Type h (higher) or l (lower), or quit to leave.")
                 continue
@@ -2127,7 +2132,7 @@ def run_dex_it(settings: GameSettings) -> None:
             bgm.play_completion_sound()
             anchor = guess
         else:
-            print(
+            _wrong_guess_feedback(
                 f"Wrong! {guess.name} is #{guess.dex_number}, {target.name} is #{target.dex_number}."
             )
             if streak > 0:
@@ -2180,7 +2185,7 @@ def run_power_levels(settings: GameSettings) -> None:
         print(f"Is {guess.name}'s base stat total (BST) higher or lower than {target.name}'s?")
 
         while True:
-            raw = input("> ").strip()
+            raw = input("Guess> ").strip()
             if not raw:
                 print("Type h (higher) or l (lower), or quit to leave.")
                 continue
@@ -2204,7 +2209,7 @@ def run_power_levels(settings: GameSettings) -> None:
             bgm.play_completion_sound()
             anchor = guess
         else:
-            print(
+            _wrong_guess_feedback(
                 f"Wrong! {guess.name} has BST {guess.bst}, {target.name} has BST {target.bst}."
             )
             if streak > 0:
@@ -2232,7 +2237,7 @@ def run_ability_effects(settings: GameSettings) -> bool | None:
     max_guesses = _input_guess_count("How many guesses for Ability Effects?", 5)
     ensure_ability_guess_index()
     print()
-    print("Ability Effects: name the ability from its English mechanical description (PokéAPI effect_entries).")
+    print("Ability Effects: name the ability from its English mechanical description.")
     print("The species and ability names are redacted in the text.")
     print("Commands: clue (next English effect entry, if any), quit")
     revealed_count = 0
@@ -2284,7 +2289,7 @@ def run_ability_effects(settings: GameSettings) -> bool | None:
             print("You already guessed that ability.")
             continue
         wrong_slugs.add(canon)
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. The ability was {display_ability_name(ch.ability_slug)}.")
@@ -2300,7 +2305,7 @@ def run_item_lore(_settings: GameSettings) -> bool | None:
     max_guesses = _input_guess_count("How many guesses for Item Lore?", 5)
     ensure_item_guess_index()
     print()
-    print("Item Lore: name the item from its English flavor text (PokéAPI flavor_text_entries).")
+    print("Item Lore: name the item from its English flavor text.")
     print("The item name is redacted in the text.")
     print("Commands: clue (next English flavor line, if any), quit")
     revealed_count = 0
@@ -2340,7 +2345,7 @@ def run_item_lore(_settings: GameSettings) -> bool | None:
             print("You already guessed that item.")
             continue
         wrong_slugs.add(canon)
-        print("Nope.")
+        _wrong_guess_feedback()
         turn += 1
 
     print(f"Out of guesses. The item was {display_item_name(ch.item_slug)}.")

@@ -82,8 +82,8 @@ def prompt_line(c: ExpYieldChallenge) -> str:
     n = len(c.names)
     word = f" of these {n} species" if n > 2 else " of the two"
     if c.ask_more:
-        return f"Which{word} gives the MOST base experience when defeated? (PokéAPI field: base_experience.)"
-    return f"Which{word} gives the LEAST base experience when defeated? (PokéAPI field: base_experience.)"
+        return f"Which{word} gives the MOST base experience when defeated?"
+    return f"Which{word} gives the LEAST base experience when defeated?"
 
 
 def letter_labels(n: int) -> tuple[str, ...]:
