@@ -25,6 +25,15 @@ from pokequiz.games.dexit import parse_higher_lower, pick_next_guess, pick_targe
 from pokequiz.games.power_levels import is_correct_guess as power_levels_is_correct
 from pokequiz.games.power_levels import pick_next_guess as power_levels_pick_next
 from pokequiz.games.power_levels import pick_target_and_guess as power_levels_pick_pair
+from pokequiz.games.ability_effects import ability_slug_from_user_guess, build_challenge as build_ability_effects_challenge
+from pokequiz.games.ability_effects import ensure_ability_guess_index, redact_for_ability
+from pokequiz.games.item_lore import build_challenge as build_item_lore_challenge
+from pokequiz.games.item_lore import (
+    display_item_name,
+    ensure_item_guess_index,
+    item_slug_from_user_guess,
+    redact_for_item,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2208,6 +2217,136 @@ def run_power_levels(settings: GameSettings) -> None:
         print()
 
 
+def run_ability_effects(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return None
+
+    ch = build_ability_effects_challenge(pool)
+    if ch is None:
+        print("Could not build Ability Effects round (API issue or no English effect text). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Ability Effects?", 5)
+    ensure_ability_guess_index()
+    print()
+    print("Ability Effects: name the ability from its English mechanical description (PokéAPI effect_entries).")
+    print("The species and ability names are redacted in the text.")
+    print("Commands: clue (next English effect entry, if any), quit")
+    revealed_count = 0
+    print(f"Effect {revealed_count + 1}/{len(ch.descriptions)}:")
+    print(
+        redact_for_ability(
+            ch.descriptions[revealed_count],
+            ability_slug=ch.ability_slug,
+            pokemon_display=ch.pokemon_name,
+        )
+    )
+    revealed_count = 1
+    wrong_slugs: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Ability ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Ability Effects. The ability was {display_ability_name(ch.ability_slug)}.")
+            return False
+        if raw.casefold() in {"clue", "c", "hint"}:
+            if revealed_count >= len(ch.descriptions):
+                print("No more English effect descriptions available.")
+            else:
+                print(f"Effect {revealed_count + 1}/{len(ch.descriptions)}:")
+                print(
+                    redact_for_ability(
+                        ch.descriptions[revealed_count],
+                        ability_slug=ch.ability_slug,
+                        pokemon_display=ch.pokemon_name,
+                    )
+                )
+                revealed_count += 1
+            continue
+
+        canon = ability_slug_from_user_guess(raw)
+        if canon is None:
+            print("That doesn't match a known Pokédex ability (check spelling).")
+            continue
+        if canon == ch.ability_slug:
+            print(f"Correct! It was {display_ability_name(ch.ability_slug)}.")
+            bgm.play_completion_sound()
+            return True
+        if canon in wrong_slugs:
+            print("You already guessed that ability.")
+            continue
+        wrong_slugs.add(canon)
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. The ability was {display_ability_name(ch.ability_slug)}.")
+    return False
+
+
+def run_item_lore(_settings: GameSettings) -> bool | None:
+    ch = build_item_lore_challenge()
+    if ch is None:
+        print("Could not build Item Lore round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Item Lore?", 5)
+    ensure_item_guess_index()
+    print()
+    print("Item Lore: name the item from its English flavor text (PokéAPI flavor_text_entries).")
+    print("The item name is redacted in the text.")
+    print("Commands: clue (next English flavor line, if any), quit")
+    revealed_count = 0
+    print(f"Flavor {revealed_count + 1}/{len(ch.descriptions)}:")
+    print(redact_for_item(ch.descriptions[revealed_count], item_slug=ch.item_slug))
+    revealed_count = 1
+    wrong_slugs: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Item ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        if raw.casefold() in {"quit", "q", "exit"}:
+            print(f"Leaving Item Lore. The item was {display_item_name(ch.item_slug)}.")
+            return False
+        if raw.casefold() in {"clue", "c", "hint"}:
+            if revealed_count >= len(ch.descriptions):
+                print("No more English flavor lines available.")
+            else:
+                print(f"Flavor {revealed_count + 1}/{len(ch.descriptions)}:")
+                print(redact_for_item(ch.descriptions[revealed_count], item_slug=ch.item_slug))
+                revealed_count += 1
+            continue
+
+        canon = item_slug_from_user_guess(raw)
+        if canon is None:
+            print("That doesn't match a known Pokédex item (check spelling).")
+            continue
+        if canon == ch.item_slug:
+            print(f"Correct! It was {display_item_name(ch.item_slug)}.")
+            bgm.play_completion_sound()
+            return True
+        if canon in wrong_slugs:
+            print("You already guessed that item.")
+            continue
+        wrong_slugs.add(canon)
+        print("Nope.")
+        turn += 1
+
+    print(f"Out of guesses. The item was {display_item_name(ch.item_slug)}.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2264,6 +2403,8 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "23) EXP Yield")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "24) DexIt")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "25) Power Levels")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "26) Ability Effects")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "27) Item Lore")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2322,6 +2463,10 @@ def main() -> None:
                 run_dex_it(settings)
             elif choice == "25":
                 run_power_levels(settings)
+            elif choice == "26":
+                _route_bgm_after_game(run_ability_effects(settings))
+            elif choice == "27":
+                _route_bgm_after_game(run_item_lore(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

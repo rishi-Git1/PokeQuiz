@@ -127,6 +127,12 @@ A **higher / lower** run on **National Pokédex** numbers. You see a **Target** 
 ### 25) Power Levels
 Same **chained higher / lower** idea as DexIt, but using **base stat total (BST)** from the minidex (sum of base HP, Attack, Defense, Special Attack, Special Defense, and Speed). The Target shows **BST**; you compare the Guess’s BST to the Target’s. Session high score, audio behavior, and chain/reset rules match DexIt.
 
+### 26) Ability Effects
+Guess an **ability** from its English **mechanical effect** text (PokéAPI `effect_entries`). The first English description is shown with the **ability** and **source species** names redacted. Type **clue** (or `c` / `hint`) to reveal further English effect entries when more exist. Configurable guess count; **last-guess** warning and **loser** BGM follow the same rules as other guess modes.
+
+### 27) Item Lore
+Guess an **item** from English **flavor text** (PokéAPI `flavor_text_entries`). The first line is shown with the **item name** redacted; **clue** adds the next distinct English line when available. Configurable guess count; **last-guess** warning and **loser** BGM match other guess modes.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
