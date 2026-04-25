@@ -175,6 +175,9 @@ Given a Poké Ball-category **item**, answer its **sell price** (half of buy cos
 ### 41) Mastermind
 Guess a hidden **two-slot type combination** in **9 attempts**. Each guess returns exactly two feedback colors, prioritized as **Green**, then **Yellow**, then **Gray** (`Green` = right type/right slot, `Yellow` = right type/wrong slot, `Gray` = type not present). No clues in this mode. Illegal guesses (unknown type, duplicate type) and repeated guesses do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
 
+### 42) War
+You and the CPU are each dealt **10 Pokémon cards** (from current filters). Each round randomly picks one base stat, then both sides play one unplayed card. Higher stat wins the round and takes both cards for scoring; ties are resolved by a **50/50 coin flip** and the winner takes both cards. Both your list and the CPU list are shown every round (CPU list in light red). No hints in this mode; no card can be played twice; standard wrong/completion audio behavior applies (loss/quit follows normal loser-music routing).
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

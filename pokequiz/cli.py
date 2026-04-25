@@ -94,6 +94,9 @@ from pokequiz.games.mastermind_types import (
     parse_guess as parse_mastermind_guess,
     display_type_name as display_mastermind_type_name,
 )
+from pokequiz.games.war_game import choose_cpu_card as war_choose_cpu_card
+from pokequiz.games.war_game import random_stat as war_random_stat
+from pokequiz.games.war_game import stat_value as war_stat_value
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3244,6 +3247,112 @@ def run_mastermind(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_war(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if len(pool) < 20:
+        print("War needs at least 20 Pokémon in the current filter.")
+        return None
+
+    picked = random.sample(pool, 20)
+    user_team = picked[:10]
+    cpu_team = picked[10:]
+    user_points = 0
+    cpu_points = 0
+    round_no = 1
+
+    def _show_teams() -> None:
+        print("\nYour available cards:")
+        for i, mon in enumerate(user_team, start=1):
+            print(f"  {i}) {mon.name}")
+        # light red CPU list
+        red = "\x1b[38;2;255;160;160m"
+        reset = "\x1b[0m"
+        print(red + "\nCPU available cards:" + reset)
+        for i, mon in enumerate(cpu_team, start=1):
+            print(red + f"  {i}) {mon.name}" + reset)
+
+    print()
+    print("War: each round uses one random stat. Higher stat wins the round and takes both cards.")
+    print("If stats tie, a 50/50 coin flip decides who takes both cards.")
+    print("No card can be played twice.")
+    print("Commands: quit")
+
+    while user_team and cpu_team:
+        stat = war_random_stat()
+        cpu_pick = war_choose_cpu_card(cpu_team, user_team, stat.field)
+        if cpu_pick is None:
+            print("Could not choose a valid CPU card for this round. Ending run.")
+            break
+
+        print(f"\n=== Round {round_no} ===")
+        print(f"Score — You: {user_points} | CPU: {cpu_points}")
+        print(f"Round stat: {stat.label}")
+        _show_teams()
+
+        while True:
+            raw = input("Play card by number or name (or quit): ").strip()
+            if not raw:
+                print("Input cannot be blank.")
+                continue
+            cmd = raw.casefold()
+            if cmd in {"quit", "q", "exit"}:
+                print("Leaving War.")
+                print(f"Final score — You: {user_points} | CPU: {cpu_points}")
+                return False
+            pick: Pokemon | None = None
+            if raw.isdigit():
+                idx = int(raw)
+                if 1 <= idx <= len(user_team):
+                    pick = user_team[idx - 1]
+            if pick is None:
+                for mon in user_team:
+                    if normalize_name(raw) == normalize_name(mon.name):
+                        pick = mon
+                        break
+            if pick is None:
+                print("Pick a valid unplayed card from your list.")
+                continue
+            user_pick = pick
+            break
+
+        uv = war_stat_value(user_pick, stat.field)
+        cv = war_stat_value(cpu_pick, stat.field)
+        print(f"You played: {user_pick.name} ({stat.label} {uv})")
+        print(f"CPU played: {cpu_pick.name} ({stat.label} {cv})")
+
+        if uv > cv:
+            user_points += 2
+            print("Round result: You win this battle and take both cards.")
+            bgm.play_completion_sound()
+        elif uv < cv:
+            cpu_points += 2
+            _wrong_guess_feedback("Round result: CPU wins this battle and takes both cards.")
+        else:
+            if random.choice((True, False)):
+                user_points += 2
+                print("Round result: Tie stat. Coin flip favors you; you take both cards.")
+                bgm.play_completion_sound()
+            else:
+                cpu_points += 2
+                _wrong_guess_feedback("Round result: Tie stat. Coin flip favors CPU; CPU takes both cards.")
+
+        user_team.remove(user_pick)
+        cpu_team.remove(cpu_pick)
+        round_no += 1
+
+    print(f"\nFinal score — You: {user_points} | CPU: {cpu_points}")
+    if user_points > cpu_points:
+        print("You win War!")
+        bgm.play_completion_sound()
+        return True
+    if user_points < cpu_points:
+        print("CPU wins War.")
+        return False
+    print("War ends in a draw.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3316,6 +3425,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "39) Catch & Hatch")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Sell")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "41) Mastermind")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "42) War")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3406,6 +3516,8 @@ def main() -> None:
                 _route_bgm_after_game(run_sell_quiz(settings))
             elif choice == "41":
                 _route_bgm_after_game(run_mastermind(settings))
+            elif choice == "42":
+                _route_bgm_after_game(run_war(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
