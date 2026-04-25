@@ -3490,6 +3490,7 @@ def run_move_chain_connections(_settings: GameSettings) -> bool | None:
 
     orange = "\x1b[38;5;208m"
     dark_blue = "\x1b[34m"
+    light_pink = "\x1b[38;2;255;182;193m"
     reset = "\x1b[0m"
     cell_w = 24
 
@@ -3572,6 +3573,7 @@ def run_move_chain_connections(_settings: GameSettings) -> bool | None:
             if found is not None:
                 solved.add(found)
                 print(f"{dark_blue}Connection found!{reset}")
+                print(f"{light_pink}{ch.groups[found].label}{reset}")
                 bgm.play_completion_sound()
                 continue
 
