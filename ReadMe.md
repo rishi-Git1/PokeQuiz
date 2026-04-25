@@ -151,6 +151,9 @@ Given a **generation + battle environment** (Nature Power context), guess the mo
 ### 33) Method Man
 Given a **Pokémon**, **generation**, and **move**, guess the move's **primary learn method** in that generation (`Level-up`, `Machine`, `Egg`, or `Tutor`) using generation-specific learn-method data from move `version_group_details`. No clues in this mode. Configurable guess count; unknown method text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
 
+### 34) Characteristic Decoder
+Given a Pokémon **Characteristic** (from the PokéAPI characteristic endpoint), guess which stat it maps to as that Pokémon's highest IV family (`HP`, `Attack`, `Defense`, `Special Attack`, `Special Defense`, or `Speed`). No clues in this mode. Configurable guess count (defaults to 2); unknown stat text and repeated guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

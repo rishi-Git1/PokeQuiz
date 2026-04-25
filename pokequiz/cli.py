@@ -64,6 +64,11 @@ from pokequiz.games.method_man import (
     display_method_name as display_method_man_method_name,
     parse_method_guess as method_man_parse_method_guess,
 )
+from pokequiz.games.characteristic_decoder import (
+    build_challenge as build_characteristic_decoder_challenge,
+    display_stat_name as display_characteristic_stat_name,
+    parse_stat_guess as parse_characteristic_stat_guess,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2716,6 +2721,56 @@ def run_method_man(settings: GameSettings) -> bool | None:
     return False
 
 
+def run_characteristic_decoder(_settings: GameSettings) -> bool | None:
+    ch = build_characteristic_decoder_challenge()
+    if ch is None:
+        print("Could not build Characteristic Decoder round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for Characteristic Decoder?", 2)
+    print()
+    print("Characteristic Decoder: map the characteristic to its corresponding stat.")
+    print(f'Characteristic: "{ch.characteristic_text}"')
+    print("Answer with one stat: HP, Attack, Defense, Special Attack, Special Defense, or Speed.")
+    print("Commands: quit")
+    seen: set[str] = set()
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Stat ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving Characteristic Decoder. Answer was "
+                f"{display_characteristic_stat_name(ch.stat_slug)}."
+            )
+            return False
+        canon = parse_characteristic_stat_guess(raw)
+        if canon is None:
+            print(f'Unknown stat: "{raw}".')
+            continue
+        if canon in seen:
+            print(f'You already guessed "{display_characteristic_stat_name(canon)}".')
+            continue
+        seen.add(canon)
+        if canon == ch.stat_slug:
+            print(f"Correct! It was {display_characteristic_stat_name(ch.stat_slug)}.")
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(
+        "Out of guesses. Answer was "
+        f"{display_characteristic_stat_name(ch.stat_slug)}."
+    )
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2780,6 +2835,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "31) All Natural")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "32) Environment Map")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "33) Method Man")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "34) Characteristic Decoder")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2854,6 +2910,8 @@ def main() -> None:
                 _route_bgm_after_game(run_environment_map(settings))
             elif choice == "33":
                 _route_bgm_after_game(run_method_man(settings))
+            elif choice == "34":
+                _route_bgm_after_game(run_characteristic_decoder(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
