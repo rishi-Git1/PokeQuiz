@@ -97,6 +97,7 @@ from pokequiz.games.mastermind_types import (
 from pokequiz.games.war_game import choose_cpu_card as war_choose_cpu_card
 from pokequiz.games.war_game import random_stat as war_random_stat
 from pokequiz.games.war_game import stat_value as war_stat_value
+from pokequiz.games.stamina_hangman import build_challenge as build_stamina_hangman_challenge
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3353,6 +3354,125 @@ def run_war(settings: GameSettings) -> bool | None:
     return False
 
 
+def run_stamina_hangman(_settings: GameSettings) -> bool | None:
+    ch = build_stamina_hangman_challenge()
+    if ch is None:
+        print("Could not build Stamina Hangman round (API issue). Try again.")
+        return None
+
+    name_length = sum(1 for c in ch.move_display if c.isalpha())
+    total_lives = _input_guess_count(
+        f"The move is {name_length} letters long. How many hearts for Stamina Hangman?",
+        6,
+    )
+    lives_lost = 0
+    guessed_letters: set[str] = set()
+    wrong_letters: set[str] = set()
+    hint_used = False
+    hint_line = ""
+
+    def _masked_word() -> str:
+        out: list[str] = []
+        for c in ch.move_display:
+            if c.isalpha():
+                out.append(c if c.casefold() in guessed_letters else "_")
+            else:
+                out.append(c)
+        return " ".join(out)
+
+    def _is_complete() -> bool:
+        for c in ch.move_display:
+            if c.isalpha() and c.casefold() not in guessed_letters:
+                return False
+        return True
+
+    def _hearts_line() -> str:
+        red = "\x1b[31m"
+        reset = "\x1b[0m"
+        lost = (red + "♥" + reset) * lives_lost
+        left = "♡" * (total_lives - lives_lost)
+        return lost + left
+
+    print()
+    print("Stamina Hangman: guess the hidden move name letter-by-letter.")
+    print("Rules:")
+    print(f" - You have {total_lives} lives.")
+    print(" - Input either ONE letter, type HINT, or type ANSWER (case-insensitive).")
+    print(" - HINT can only be used once and costs 2 lives. It reveals the move type.")
+    print(" - ANSWER lets you guess the full move name; a failed full guess costs 2 lives.")
+    print(" - Wrong letter guesses also cost 1 life.")
+    print(" - Repeated letter guesses are not allowed.")
+    print(" - You cannot request HINT more than once.")
+    print(f" - Move name length: {name_length} letters.")
+    print("Commands: quit")
+
+    while lives_lost < total_lives:
+        print("\nLives:", _hearts_line())
+        print("Move:", _masked_word())
+        if wrong_letters:
+            print("Wrong letters:", ", ".join(sorted(x.upper() for x in wrong_letters)))
+        if hint_line:
+            print(hint_line)
+
+        raw = input("Letter or HINT: ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(f"Leaving Stamina Hangman. The move was {ch.move_display}.")
+            return False
+        if cmd == "answer":
+            full_raw = input("Full move guess: ").strip()
+            if not full_raw:
+                print("Full answer guess cannot be blank.")
+                continue
+            if normalize_name(full_raw) == normalize_name(ch.move_display):
+                print("\nLives:", _hearts_line())
+                print("Move:", " ".join(ch.move_display))
+                print(f"Correct! The move was {ch.move_display}.")
+                bgm.play_completion_sound()
+                return True
+            lives_lost = min(total_lives, lives_lost + 2)
+            _wrong_guess_feedback("Full answer is incorrect (-2 lives).")
+            continue
+        if cmd == "hint":
+            if hint_used:
+                print("Hint is already used.")
+                continue
+            hint_used = True
+            lives_lost = min(total_lives, lives_lost + 2)
+            hint_line = f"Type hint: {ch.move_type}"
+            _wrong_guess_feedback("Hint used (-2 lives).")
+            continue
+
+        if len(raw) != 1 or not raw.isalpha():
+            print('Enter exactly one letter or "HINT".')
+            continue
+        letter = raw.casefold()
+        if letter in guessed_letters or letter in wrong_letters:
+            print(f'You already guessed "{raw.upper()}".')
+            continue
+
+        if letter in ch.move_display.casefold():
+            guessed_letters.add(letter)
+            if _is_complete():
+                print("\nLives:", _hearts_line())
+                print("Move:", " ".join(ch.move_display))
+                print(f"Correct! The move was {ch.move_display}.")
+                bgm.play_completion_sound()
+                return True
+            continue
+
+        wrong_letters.add(letter)
+        lives_lost += 1
+        _wrong_guess_feedback()
+
+    print("\nLives:", _hearts_line())
+    print(f"Out of lives. The move was {ch.move_display}.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3426,6 +3546,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "40) Sell")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "41) Mastermind")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "42) War")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3518,6 +3639,8 @@ def main() -> None:
                 _route_bgm_after_game(run_mastermind(settings))
             elif choice == "42":
                 _route_bgm_after_game(run_war(settings))
+            elif choice == "43":
+                _route_bgm_after_game(run_stamina_hangman(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

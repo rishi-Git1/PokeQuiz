@@ -178,6 +178,9 @@ Guess a hidden **two-slot type combination** in **9 attempts**. Each guess retur
 ### 42) War
 You and the CPU are each dealt **10 Pokémon cards** (from current filters). Each round randomly picks one base stat, then both sides play one unplayed card. Higher stat wins the round and takes both cards for scoring; ties are resolved by a **50/50 coin flip** and the winner takes both cards. Both your list and the CPU list are shown every round (CPU list in light red). No hints in this mode; no card can be played twice; standard wrong/completion audio behavior applies (loss/quit follows normal loser-music routing).
 
+### 43) Stamina Hangman
+Guess a hidden **move name** letter-by-letter with a user-chosen number of hearts (lives). At the start, the game tells you the move-name length. Input one letter per turn, or use `HINT` once to reveal the move type at a cost of **2 hearts**. You can also type `ANSWER` to attempt the full move name (case-insensitive); a failed full-answer attempt costs **2 hearts**. Wrong letter guesses cost 1 heart, repeated letters are blocked, and numeric move names are excluded from this mode.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
