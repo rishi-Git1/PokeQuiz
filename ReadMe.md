@@ -136,6 +136,9 @@ Guess an **item** from English **flavor text** (PokéAPI `flavor_text_entries`).
 ### 28) Move Match
 Guess a **move** from redacted English move descriptions. The round starts with the move's **short effect**; `clue` reveals the **full effect** first, then additional Pokédex-style move flavor text lines when available. Move names are redacted in the clue text. Configurable guess count; invalid/repeat move guesses do not consume turns; last-guess warning and loser BGM match other guess modes.
 
+### 29) Machine Serial
+Guess a **move** from a machine prompt: **Generation + TM/TR code** (for example, `Generation 1, TM22`). The mode excludes HMs and includes TRs. Type `clue` to reveal manual clues in fixed order: move type, then move class (Physical/Special/Status), then move power (only for damaging moves). Configurable guess count; invalid/repeat move guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.
