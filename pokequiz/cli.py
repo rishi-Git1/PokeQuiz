@@ -3253,13 +3253,13 @@ def run_mastermind(_settings: GameSettings) -> bool | None:
 def run_war(settings: GameSettings) -> bool | None:
     dex = load_dex()
     pool = dex.filtered(settings)
-    if len(pool) < 20:
-        print("War needs at least 20 Pokémon in the current filter.")
+    if len(pool) < 22:
+        print("War needs at least 22 Pokémon in the current filter.")
         return None
 
-    picked = random.sample(pool, 20)
-    user_team = picked[:10]
-    cpu_team = picked[10:]
+    picked = random.sample(pool, 22)
+    user_team = picked[:11]
+    cpu_team = picked[11:]
     user_points = 0
     cpu_points = 0
     round_no = 1

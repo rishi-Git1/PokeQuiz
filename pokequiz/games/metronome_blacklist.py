@@ -75,6 +75,36 @@ _BLACKLISTED_MOVE_SLUGS: frozenset[str] = frozenset(
 )
 
 
+_SIGNATURE_ZMOVE_SLUGS: frozenset[str] = frozenset(
+    {
+        "catastropika",
+        "sinister-arrow-raid",
+        "malicious-moonsault",
+        "oceanic-operetta",
+        "soul-stealing-7-star-strike",
+        "stoked-sparksurfer",
+        "pulverizing-pancake",
+        "extreme-evoboost",
+        "genesis-supernova",
+        "10-000-000-volt-thunderbolt",
+        "light-that-burns-the-sky",
+        "searing-sunraze-smash",
+        "menacing-moonraze-maelstrom",
+        "lets-snuggle-forever",
+        "splintered-stormshards",
+        "clangorous-soulblaze",
+        "guardian-of-alola",
+    }
+)
+
+
+def _is_z_move_slug(move_slug: str) -> bool:
+    # Type-based Z-Moves in PokéAPI are split into --physical/--special variants.
+    if move_slug.endswith("--physical") or move_slug.endswith("--special"):
+        return True
+    return move_slug in _SIGNATURE_ZMOVE_SLUGS
+
+
 @lru_cache(maxsize=1)
 def _all_move_slugs() -> tuple[str, ...]:
     out: list[str] = []
@@ -94,7 +124,7 @@ def build_challenge() -> MetronomeBlacklistChallenge:
     move = random.choice(_all_move_slugs())
     return MetronomeBlacklistChallenge(
         move_slug=move,
-        callable_by_metronome=move not in _BLACKLISTED_MOVE_SLUGS,
+        callable_by_metronome=(move not in _BLACKLISTED_MOVE_SLUGS and not _is_z_move_slug(move)),
     )
 
 
