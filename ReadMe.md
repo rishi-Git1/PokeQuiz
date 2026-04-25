@@ -139,6 +139,12 @@ Guess a **move** from redacted English move descriptions. The round starts with 
 ### 29) Machine Serial
 Guess a **move** from a machine prompt: **Generation + TM/TR code** (for example, `Generation 1, TM22`). The mode excludes HMs and includes TRs. Type `clue` to reveal manual clues in fixed order: move type, then move class (Physical/Special/Status), then move power (only for damaging moves). Configurable guess count; invalid/repeat move guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
 
+### 30) Fling Force
+Given an **item**, guess either its **Fling Power** (integer) or its **Fling status effect** (when one exists). One manual `clue` is available and only indicates whether the interaction is **damage-only** or **status-oriented** (no exact value/effect reveal). Configurable guess count; invalid/repeat guesses do not consume turns; standard wrong/completion/last-guess audio behavior applies.
+
+### 31) All Natural
+Given a **Berry**, guess the move Natural Gift result as **Type + Base Power** in one line (for example, `Fire 80` or `80 Fire`). No clues in this mode. Configurable guess count; malformed input or unknown type text does not consume turns; repeated guesses are detected; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

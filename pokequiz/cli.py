@@ -48,6 +48,12 @@ from pokequiz.games.fling_force import (
     parse_guess as fling_force_parse_guess,
     reveal_answer_line as fling_force_reveal_answer_line,
 )
+from pokequiz.games.all_natural import (
+    build_challenge as build_all_natural_challenge,
+    display_berry_name,
+    display_type_name as display_natural_gift_type_name,
+    parse_guess as all_natural_parse_guess,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -2537,6 +2543,67 @@ def run_fling_force(_settings: GameSettings) -> bool | None:
     return False
 
 
+def run_all_natural(_settings: GameSettings) -> bool | None:
+    ch = build_all_natural_challenge()
+    if ch is None:
+        print("Could not build All Natural round (API issue). Try again.")
+        return None
+
+    max_guesses = _input_guess_count("How many guesses for All Natural?", 5)
+    print()
+    print("All Natural: given a Berry, guess Natural Gift Type and Base Power.")
+    print(f"Berry: {display_berry_name(ch.berry_slug)}")
+    print("Enter both in one line, e.g. Fire 80 (or 80 Fire).")
+    print("Commands: quit")
+    seen: set[str] = set()
+
+    def _display_guess_from_key(key: str) -> str:
+        try:
+            t_slug, p = key.split(":", 1)
+        except ValueError:
+            return key
+        return f"{display_natural_gift_type_name(t_slug)} {p}"
+
+    turn = 1
+    while turn <= max_guesses:
+        _last_guess_warning(turn, max_guesses)
+        raw = input(f"Answer ({turn}/{max_guesses}, or command): ").strip()
+        if not raw:
+            print("Guess cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print(
+                "Leaving All Natural. Answer was "
+                f"{display_natural_gift_type_name(ch.natural_gift_type_slug)} {ch.natural_gift_power}."
+            )
+            return False
+
+        ok, key, err = all_natural_parse_guess(raw, ch)
+        if not key:
+            print(err or "Enter both a type and a single power number (example: Fire 80).")
+            continue
+        if key in seen:
+            print(f'You already guessed "{_display_guess_from_key(key)}".')
+            continue
+        seen.add(key)
+        if ok:
+            print(
+                "Correct! It was "
+                f"{display_natural_gift_type_name(ch.natural_gift_type_slug)} {ch.natural_gift_power}."
+            )
+            bgm.play_completion_sound()
+            return True
+        _wrong_guess_feedback()
+        turn += 1
+
+    print(
+        "Out of guesses. Answer was "
+        f"{display_natural_gift_type_name(ch.natural_gift_type_slug)} {ch.natural_gift_power}."
+    )
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -2598,6 +2665,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "28) Move Match")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "29) Machine Serial")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "30) Fling Force")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "31) All Natural")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -2666,6 +2734,8 @@ def main() -> None:
                 _route_bgm_after_game(run_machine_serial(settings))
             elif choice == "30":
                 _route_bgm_after_game(run_fling_force(settings))
+            elif choice == "31":
+                _route_bgm_after_game(run_all_natural(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
