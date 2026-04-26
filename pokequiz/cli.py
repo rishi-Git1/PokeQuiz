@@ -107,6 +107,16 @@ from pokequiz.games.movepool_sudoku import display_type_name as display_sudoku_t
 from pokequiz.games.movepool_sudoku import parse_type_guess as parse_sudoku_type_guess
 from pokequiz.games.pokemon_tetris import resolve_contact as tetris_resolve_contact
 from pokequiz.games.pokemon_tetris import spawn_type as tetris_spawn_type
+from pokequiz.games.legendary_yahtzee import (
+    CATEGORIES as YAHTZEE_CATEGORIES,
+    CATEGORY_LABELS as YAHTZEE_LABELS,
+    RollMove as YahtzeeMove,
+    best_category_for_hand as yahtzee_best_category_for_hand,
+    cpu_best_keep_mask as yahtzee_cpu_best_keep_mask,
+    display_move_name as display_yahtzee_move_name,
+    power_value as yahtzee_power_value,
+    random_roll_move as yahtzee_random_roll_move,
+)
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3894,6 +3904,118 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
         time.sleep(0.02)
 
 
+def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
+    print()
+    print("Legendary Yahtzee: 4 rounds, each side rolls 5 moves up to 3 times.")
+    print("Categories: Full House, Large Straight, Four of a Kind, Legendary.")
+    print("Computer uses expected-value best-play policy each turn.")
+    print("Commands during hold phase: keep <indices>, roll, quit")
+
+    player_available = set(YAHTZEE_CATEGORIES)
+    cpu_available = set(YAHTZEE_CATEGORIES)
+    player_score = 0
+    cpu_score = 0
+
+    def _show_hand(hand: list[YahtzeeMove]) -> None:
+        for i, m in enumerate(hand, start=1):
+            p = m.power if m.power is not None else "-"
+            print(
+                f"  {i}) {display_yahtzee_move_name(m.slug)} | "
+                f"Type {m.type_slug.title()} | Class {m.damage_class.title()} | Power {p}"
+            )
+
+    def _reroll(hand: list[YahtzeeMove], keep_mask: int) -> list[YahtzeeMove]:
+        out = hand.copy()
+        for i in range(5):
+            if (keep_mask >> i) & 1:
+                continue
+            out[i] = yahtzee_random_roll_move()
+        return out
+
+    for round_no in range(1, 5):
+        print(f"\n=== Legendary Yahtzee Round {round_no}/4 ===")
+        print(f"Score — You: {player_score} | CPU: {cpu_score}")
+
+        # Player turn
+        hand = [yahtzee_random_roll_move() for _ in range(5)]
+        for roll_no in range(1, 4):
+            print(f"\nYour roll {roll_no}/3:")
+            _show_hand(hand)
+            if roll_no == 3:
+                break
+            while True:
+                raw = input("Hold command (keep 1 3 5 / roll / quit): ").strip()
+                if not raw:
+                    print("Input cannot be blank.")
+                    continue
+                cmd = raw.casefold()
+                if cmd in {"quit", "q", "exit"}:
+                    print("Leaving Legendary Yahtzee.")
+                    return False
+                if cmd == "roll":
+                    hand = _reroll(hand, 0)
+                    break
+                parts = raw.split()
+                if not parts or parts[0].casefold() != "keep":
+                    print("Use keep <indices>, roll, or quit.")
+                    continue
+                idxs = parts[1:]
+                if not idxs or any(not p.isdigit() for p in idxs):
+                    print("keep requires indices 1..5.")
+                    continue
+                nums = [int(p) for p in idxs]
+                if any(n < 1 or n > 5 for n in nums):
+                    print("Indices must be between 1 and 5.")
+                    continue
+                keep_mask = 0
+                for n in nums:
+                    keep_mask |= 1 << (n - 1)
+                hand = _reroll(hand, keep_mask)
+                break
+
+        print("\nAvailable categories:")
+        for k in YAHTZEE_CATEGORIES:
+            if k not in player_available:
+                continue
+            print(f"- {k}: {YAHTZEE_LABELS[k]}")
+        while True:
+            cat_raw = input("Choose category key: ").strip().casefold().replace("-", "_")
+            if cat_raw not in player_available:
+                print("Pick an unused category key from the list.")
+                continue
+            player_cat = cat_raw
+            break
+        from pokequiz.games.legendary_yahtzee import score_category as yahtzee_score_category
+        player_turn_score = yahtzee_score_category(hand, player_cat)
+        player_available.remove(player_cat)
+        player_score += player_turn_score
+        print(f"You scored {player_turn_score} in {YAHTZEE_LABELS[player_cat]}.")
+        if player_turn_score > 0:
+            bgm.play_completion_sound()
+
+        # CPU turn
+        cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
+        mask1 = yahtzee_cpu_best_keep_mask(cpu_hand, 2, cpu_available)
+        cpu_hand = _reroll(cpu_hand, mask1)
+        mask2 = yahtzee_cpu_best_keep_mask(cpu_hand, 1, cpu_available)
+        cpu_hand = _reroll(cpu_hand, mask2)
+        cpu_cat, cpu_turn_score = yahtzee_best_category_for_hand(cpu_hand, cpu_available)
+        cpu_available.remove(cpu_cat)
+        cpu_score += cpu_turn_score
+        print(f"CPU scores {cpu_turn_score} in {YAHTZEE_LABELS[cpu_cat]}.")
+
+    print(f"\nFinal score — You: {player_score} | CPU: {cpu_score}")
+    if player_score > cpu_score:
+        print("You win Legendary Yahtzee!")
+        bgm.play_completion_sound()
+        return True
+    if player_score < cpu_score:
+        print("CPU wins Legendary Yahtzee.")
+        return False
+    print("Legendary Yahtzee ends in a draw.")
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3971,6 +4093,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "44) Move-Chain Connections")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "45) Move-Pool Sudoku")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "46) Pokemon Tetris")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "47) Legendary Yahtzee")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -4071,6 +4194,8 @@ def main() -> None:
                 _route_bgm_after_game(run_movepool_sudoku(settings))
             elif choice == "46":
                 _route_bgm_after_game(run_pokemon_tetris(settings))
+            elif choice == "47":
+                _route_bgm_after_game(run_legendary_yahtzee(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

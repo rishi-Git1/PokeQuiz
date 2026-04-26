@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import os
+import random
 import threading
 from pathlib import Path
 
@@ -37,6 +38,15 @@ def _default_bgm_paths() -> list[Path]:
         base / "littleroot.ogg",
         base / "littleroot.mp3",
         base / "littleroot.wav",
+        base / "menu_theme_2.ogg",
+        base / "menu_theme_2.mp3",
+        base / "menu_theme_2.wav",
+        base / "menu_theme_3.ogg",
+        base / "menu_theme_3.mp3",
+        base / "menu_theme_3.wav",
+        base / "menu_theme_4.ogg",
+        base / "menu_theme_4.mp3",
+        base / "menu_theme_4.wav",
     ]
 
 
@@ -100,9 +110,9 @@ def resolve_bgm_file() -> Path | None:
         p = Path(env).expanduser()
         if p.is_file():
             return p
-    for candidate in _default_bgm_paths():
-        if candidate.is_file():
-            return candidate
+    available = [candidate for candidate in _default_bgm_paths() if candidate.is_file()]
+    if available:
+        return random.choice(available)
     return None
 
 
