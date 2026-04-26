@@ -92,6 +92,9 @@ def _default_loser_bgm_paths() -> list[Path]:
         base / "loser.ogg",
         base / "loser.mp3",
         base / "loser.wav",
+        base / "loser_theme_2.ogg",
+        base / "loser_theme_2.mp3",
+        base / "loser_theme_2.wav",
     ]
 
 
@@ -170,9 +173,9 @@ def resolve_loser_bgm_file() -> Path | None:
         p = Path(env).expanduser()
         if p.is_file():
             return p
-    for candidate in _default_loser_bgm_paths():
-        if candidate.is_file():
-            return candidate
+    available = [candidate for candidate in _default_loser_bgm_paths() if candidate.is_file()]
+    if available:
+        return random.choice(available)
     return None
 
 
