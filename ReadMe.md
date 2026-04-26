@@ -170,7 +170,7 @@ Given a **Pokémon** and its six base-stat values in scrambled order, answer whi
 Given a **Pokémon** and two values (`Capture Rate` and `Base Happiness`) in shuffled order, identify which value is the **Capture Rate**. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). Invalid numbers or numbers outside the shown pair do not consume turns; standard wrong/completion audio behavior applies.
 
 ### 40) Selling Out
-Given a Poké Ball-category **item**, answer its **sell price** (half of buy cost from PokéAPI `cost`). `Master Ball` and `Luxury Ball` are excluded from this mode. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numeric input does not consume turns; standard wrong/completion audio behavior applies.
+Given a shop-item **item**, answer its **sell price** (half of buy cost from PokéAPI `cost`). Item pools include Poké Balls, medicine/healing, status cures, revival, PP recovery, and vitamins; `Master Ball` and `Luxury Ball` are excluded. This mode is a **continuous run** with **1 guess per round** and a **session high streak** tracker (resets when app exits). No clues; invalid numeric input does not consume turns; standard wrong/completion audio behavior applies.
 
 ### 41) Mastermind
 Guess a hidden **two-slot type combination** in **9 attempts**. Each guess returns exactly two feedback colors, prioritized as **Green**, then **Yellow**, then **Gray** (`Green` = right type/right slot, `Yellow` = right type/wrong slot, `Gray` = type not present). No clues in this mode. Illegal guesses (unknown type, duplicate type) and repeated guesses do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
@@ -185,7 +185,10 @@ Guess a hidden **move name** letter-by-letter with a user-chosen number of heart
 A 4x4 grid of 16 move names is shown. Submit guesses as four numbers (for example, `4 5 10 13`) to find hidden groups of four connected by a shared move trait. You choose how many wrong guesses are allowed (default 4). Solved groups are shown in dark blue. If a guess is one off from a real group, you are told in orange. No repeat exact-set guesses; invalid formats do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
 
 ### 45) Move-Pool Sudoku
-Fill a **type grid** with row/column/diagonal uniqueness rules. Grid size is user-selected from **4x4 to 8x8** (default **4x4**). Some cells are fixed Pokémon clues; those slots are locked and consistent with a valid solved grid. You enter placements as `row col type`, can `clear row col`, and lose on too many wrong entries (configurable). Invalid input does not consume attempts; standard wrong/completion/last-guess audio behavior applies.
+Fill a **type grid** with row/column/diagonal uniqueness rules. Grid size is user-selected from **4x4 to 8x8** (default **4x4**). Some cells are fixed Pokémon clues; those slots are locked and consistent with a valid solved grid. You enter placements as `row col type` (or `row col type test` for a non-scoring pencil/test mark), can `clear row col`, and lose on too many wrong entries (configurable). Test entries do not count toward completion. Invalid input does not consume attempts; standard wrong/completion/last-guess audio behavior applies.
+
+### 46) Pokemon Tetris
+Single-type blocks fall in a **12x20** board and are rendered as **4x4** visual tiles. You choose drop speed (`slow` default; `medium`/`fast`) and move active blocks with arrow keys (`Left/Right`, `Down` to force drop). When blocks contact, they interact by type effectiveness (including special-case overrides like Water on Fire and Dragon on Fairy). The game ends on top-out when a new block cannot spawn at the top. Standard wrong/completion/loser-music routing applies.
 
 ## Audio (optional)
 

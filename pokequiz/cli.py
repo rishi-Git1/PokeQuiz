@@ -6,8 +6,10 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import replace
 from functools import lru_cache
+import os
 import random
 import re
+import time
 
 from pokequiz import bgm
 from pokequiz.data import _fetch_json, load_dex, normalize_name
@@ -103,6 +105,8 @@ from pokequiz.games.move_chain_connections import display_move_name as display_c
 from pokequiz.games.movepool_sudoku import build_challenge as build_movepool_sudoku_challenge
 from pokequiz.games.movepool_sudoku import display_type_name as display_sudoku_type_name
 from pokequiz.games.movepool_sudoku import parse_type_guess as parse_sudoku_type_guess
+from pokequiz.games.pokemon_tetris import resolve_contact as tetris_resolve_contact
+from pokequiz.games.pokemon_tetris import spawn_type as tetris_spawn_type
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3630,6 +3634,7 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
     max_wrong = _input_guess_count("How many wrong entries allowed?", 6)
     wrong = 0
     fills: dict[tuple[int, int], str] = {}
+    test_fills: dict[tuple[int, int], str] = {}
 
     def _is_complete() -> bool:
         for r in range(ch.size):
@@ -3645,7 +3650,7 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
         border = "+" + "+".join(["-" * width for _ in range(ch.size)]) + "+"
         print("\nMove-Pool Sudoku")
         print("Allowed types:", ", ".join(display_sudoku_type_name(t) for t in ch.type_cycle))
-        print("Rows/Cols are 1-indexed. Commands: <row> <col> <type>, clear <row> <col>, quit")
+        print("Rows/Cols are 1-indexed. Commands: <row> <col> <type> [test], clear <row> <col>, quit")
         print(border)
         for r in range(ch.size):
             cells: list[str] = []
@@ -3653,7 +3658,10 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
                 if (r, c) in ch.clues:
                     label = f"[{ch.clues[(r, c)][:13]}]"
                 elif (r, c) in fills:
-                    label = display_sudoku_type_name(fills[(r, c)])
+                    # Keep board cells plain text to avoid ANSI truncation bleed.
+                    label = f"*{display_sudoku_type_name(fills[(r, c)])}"
+                elif (r, c) in test_fills:
+                    label = display_sudoku_type_name(test_fills[(r, c)])
                 else:
                     label = "."
                 txt = f"{r+1},{c+1} {label}"
@@ -3700,13 +3708,16 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
                 print("Cannot clear a clue cell.")
                 continue
             fills.pop((r, c), None)
+            test_fills.pop((r, c), None)
             continue
 
         if len(parts) < 3:
-            print("Use: <row> <col> <type>  (example: 2 3 fire)")
+            print("Use: <row> <col> <type> [test]  (example: 2 3 fire test)")
             continue
         rr, cc = parts[0], parts[1]
-        type_raw = " ".join(parts[2:])
+        is_test_entry = len(parts) >= 4 and parts[-1].casefold() == "test"
+        type_tokens = parts[2:-1] if is_test_entry else parts[2:]
+        type_raw = " ".join(type_tokens)
         if not rr.isdigit() or not cc.isdigit():
             print("Row/col must be numeric.")
             continue
@@ -3723,11 +3734,16 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
             print(f'Unknown/invalid type for this puzzle: "{type_raw}".')
             continue
 
+        if is_test_entry:
+            test_fills[(r, c)] = guessed_type
+            continue
+
         # Strict correctness scoring: incorrect placement costs an attempt.
         if guessed_type != ch.solution[r][c]:
             wrong += 1
             _wrong_guess_feedback()
             continue
+        test_fills.pop((r, c), None)
         fills[(r, c)] = guessed_type
 
     print("Out of wrong entries. Puzzle failed.")
@@ -3735,6 +3751,147 @@ def run_movepool_sudoku(settings: GameSettings) -> bool | None:
     for r in range(ch.size):
         print(" | ".join(display_sudoku_type_name(ch.solution[r][c]) for c in range(ch.size)))
     return False
+
+
+def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
+    try:
+        import msvcrt  # type: ignore
+    except Exception:
+        print("Pokemon Tetris is currently supported on Windows terminals only.")
+        return None
+
+    speed_map = {"slow": 0.55, "medium": 0.35, "fast": 0.22}
+    while True:
+        raw = input("Drop speed for Pokemon Tetris? [slow/medium/fast, default=slow]: ").strip().casefold()
+        if not raw:
+            speed = "slow"
+            break
+        if raw in speed_map:
+            speed = raw
+            break
+        print("Choose slow, medium, or fast.")
+    drop_dt = speed_map[speed]
+
+    width = 12
+    height = 20
+    board: list[list[str | None]] = [[None for _ in range(width)] for _ in range(height)]
+    colors = {
+        "normal": "\x1b[48;2;168;167;122m",
+        "fire": "\x1b[48;2;238;129;48m",
+        "water": "\x1b[48;2;99;144;240m",
+        "electric": "\x1b[48;2;247;208;44m",
+        "grass": "\x1b[48;2;122;199;76m",
+        "ice": "\x1b[48;2;150;217;214m",
+        "fighting": "\x1b[48;2;194;46;40m",
+        "poison": "\x1b[48;2;163;62;161m",
+        "ground": "\x1b[48;2;226;191;101m",
+        "flying": "\x1b[48;2;169;143;243m",
+        "psychic": "\x1b[48;2;249;85;135m",
+        "bug": "\x1b[48;2;166;185;26m",
+        "rock": "\x1b[48;2;182;161;54m",
+        "ghost": "\x1b[48;2;115;87;151m",
+        "dragon": "\x1b[48;2;111;53;252m",
+        "dark": "\x1b[48;2;112;87;70m",
+        "steel": "\x1b[48;2;183;183;206m",
+        "fairy": "\x1b[48;2;214;133;173m",
+    }
+    reset = "\x1b[0m"
+
+    active_type = tetris_spawn_type()
+    x = width // 2
+    y = 0
+    status = ""
+
+    def _spawn_new() -> bool:
+        nonlocal active_type, x, y
+        active_type = tetris_spawn_type()
+        x = width // 2
+        y = 0
+        return board[y][x] is None
+
+    def _render() -> None:
+        os.system("cls")
+        print(f"Pokemon Tetris 12x20 | Speed: {speed.title()} | Arrows: move/drop | q to quit")
+        print("Game ends when a new block cannot spawn at the top.")
+        if status:
+            print(status)
+        else:
+            print()
+
+        # Each logical block is rendered as 4x4 chars.
+        for r in range(height):
+            line_cells: list[str] = []
+            for c in range(width):
+                t = board[r][c]
+                if r == y and c == x:
+                    t = active_type
+                if t is None:
+                    cell = "...."
+                else:
+                    bg = colors.get(t, "")
+                    fg = "\x1b[30m"
+                    abbr = (t[:2]).upper()
+                    cell = f"{bg}{fg}{abbr}  {reset}"
+                line_cells.append(cell)
+            row_txt = "".join(line_cells)
+            print(row_txt)
+            print(row_txt)
+            print(row_txt)
+            print(row_txt)
+
+    def _lock_or_interact() -> None:
+        nonlocal status
+        if y + 1 >= height or board[y + 1][x] is None:
+            # Settle normally.
+            board[y][x] = active_type
+            status = ""
+            return
+
+        # Contact with occupied cell directly below.
+        below = board[y + 1][x]
+        assert below is not None
+        res = tetris_resolve_contact(active_type, below)
+        if res.defender_after is None:
+            board[y + 1][x] = None
+        else:
+            board[y + 1][x] = res.defender_after
+        if res.attacker_kept:
+            board[y][x] = active_type
+        status = res.note
+
+    _render()
+    last_drop = time.time()
+    while True:
+        now = time.time()
+        # non-blocking keyboard poll
+        while msvcrt.kbhit():
+            ch = msvcrt.getch()
+            if ch in {b"q", b"Q"}:
+                print("Leaving Pokemon Tetris.")
+                return False
+            if ch in {b"\xe0", b"\x00"}:
+                code = msvcrt.getch()
+                if code == b"K":  # left
+                    if x > 0 and board[y][x - 1] is None:
+                        x -= 1
+                elif code == b"M":  # right
+                    if x < width - 1 and board[y][x + 1] is None:
+                        x += 1
+                elif code == b"P":  # down
+                    last_drop = 0.0  # force drop
+
+        if now - last_drop >= drop_dt:
+            last_drop = now
+            if y + 1 < height and board[y + 1][x] is None:
+                y += 1
+            else:
+                _lock_or_interact()
+                if not _spawn_new():
+                    _render()
+                    print("Top-out! You lose Pokemon Tetris.")
+                    return False
+        _render()
+        time.sleep(0.02)
 
 
 def _route_bgm_after_game(result: bool | None) -> None:
@@ -3813,6 +3970,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "44) Move-Chain Connections")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "45) Move-Pool Sudoku")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "46) Pokemon Tetris")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3911,6 +4069,8 @@ def main() -> None:
                 _route_bgm_after_game(run_move_chain_connections(settings))
             elif choice == "45":
                 _route_bgm_after_game(run_movepool_sudoku(settings))
+            elif choice == "46":
+                _route_bgm_after_game(run_pokemon_tetris(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:

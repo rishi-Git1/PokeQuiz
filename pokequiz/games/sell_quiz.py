@@ -16,7 +16,17 @@ class SellChallenge:
     sell_price: int
 
 
-_BALL_CATEGORIES: tuple[str, ...] = ("standard-balls", "special-balls", "apricorn-balls")
+_QUIZ_CATEGORIES: tuple[str, ...] = (
+    "standard-balls",
+    "special-balls",
+    "apricorn-balls",
+    "medicine",
+    "healing",
+    "status-cures",
+    "revival",
+    "pp-recovery",
+    "vitamins",
+)
 _EXCLUDED_SLUGS: frozenset[str] = frozenset({"luxury-ball", "master-ball"})
 
 
@@ -25,10 +35,10 @@ def display_item_name(slug: str) -> str:
 
 
 @lru_cache(maxsize=1)
-def _candidate_ball_slugs() -> tuple[str, ...]:
+def _candidate_item_slugs() -> tuple[str, ...]:
     out: list[str] = []
     seen: set[str] = set()
-    for category in _BALL_CATEGORIES:
+    for category in _QUIZ_CATEGORIES:
         payload = _fetch_json(f"https://pokeapi.co/api/v2/item-category/{category}")
         for row in payload.get("items", []) or []:
             name = row.get("name")
@@ -40,7 +50,7 @@ def _candidate_ball_slugs() -> tuple[str, ...]:
 
 
 def build_challenge(*, max_attempts: int = 80) -> SellChallenge | None:
-    slugs = [s for s in _candidate_ball_slugs() if s not in _EXCLUDED_SLUGS]
+    slugs = [s for s in _candidate_item_slugs() if s not in _EXCLUDED_SLUGS]
     if not slugs:
         return None
     random.shuffle(slugs)
