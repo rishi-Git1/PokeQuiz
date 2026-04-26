@@ -112,7 +112,6 @@ from pokequiz.games.legendary_yahtzee import (
     CATEGORY_LABELS as YAHTZEE_LABELS,
     RollMove as YahtzeeMove,
     best_category_for_hand as yahtzee_best_category_for_hand,
-    cpu_best_keep_mask as yahtzee_cpu_best_keep_mask,
     display_move_name as display_yahtzee_move_name,
     power_value as yahtzee_power_value,
     random_roll_move as yahtzee_random_roll_move,
@@ -3908,7 +3907,7 @@ def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
     print()
     print("Legendary Yahtzee: 4 rounds, each side rolls 5 moves up to 3 times.")
     print("Categories: Full House, Large Straight, Four of a Kind, Legendary.")
-    print("Computer uses expected-value best-play policy each turn.")
+    print("Computer rolls three times, then takes the highest-value available category.")
     print("Commands during hold phase: keep <indices>, roll, quit")
 
     player_available = set(YAHTZEE_CATEGORIES)
@@ -3995,10 +3994,14 @@ def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
 
         # CPU turn
         cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
-        mask1 = yahtzee_cpu_best_keep_mask(cpu_hand, 2, cpu_available)
-        cpu_hand = _reroll(cpu_hand, mask1)
-        mask2 = yahtzee_cpu_best_keep_mask(cpu_hand, 1, cpu_available)
-        cpu_hand = _reroll(cpu_hand, mask2)
+        print("\nCPU roll 1/3:")
+        _show_hand(cpu_hand)
+        cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
+        print("CPU roll 2/3:")
+        _show_hand(cpu_hand)
+        cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
+        print("CPU roll 3/3:")
+        _show_hand(cpu_hand)
         cpu_cat, cpu_turn_score = yahtzee_best_category_for_hand(cpu_hand, cpu_available)
         cpu_available.remove(cpu_cat)
         cpu_score += cpu_turn_score

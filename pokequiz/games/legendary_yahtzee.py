@@ -113,14 +113,12 @@ def best_category_for_hand(hand: list[RollMove], available: set[str]) -> tuple[s
 
 
 def cpu_best_keep_mask(
-    hand: list[RollMove], rerolls_left: int, available: set[str], *, samples: int = 36
+    hand: list[RollMove], available: set[str], *, samples: int = 24
 ) -> int:
     """
-    Best expected-value keep mask over 5 slots.
+    Fast one-step expected-value keep-mask chooser.
     Bit i = keep die i.
     """
-    if rerolls_left <= 0:
-        return 0b11111
     best_mask = 0
     best_ev = -1.0
     for mask in range(32):
@@ -131,12 +129,6 @@ def cpu_best_keep_mask(
                 if (mask >> i) & 1:
                     continue
                 trial[i] = random_roll_move()
-            if rerolls_left > 1:
-                next_mask = cpu_best_keep_mask(trial, rerolls_left - 1, available, samples=max(10, samples // 2))
-                for i in range(5):
-                    if (next_mask >> i) & 1:
-                        continue
-                    trial[i] = random_roll_move()
             _, score = best_category_for_hand(trial, available)
             ev_total += score
         ev = ev_total / samples
