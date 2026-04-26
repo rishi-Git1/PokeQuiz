@@ -184,6 +184,9 @@ Guess a hidden **move name** letter-by-letter with a user-chosen number of heart
 ### 44) Move-Chain Connections
 A 4x4 grid of 16 move names is shown. Submit guesses as four numbers (for example, `4 5 10 13`) to find hidden groups of four connected by a shared move trait. You choose how many wrong guesses are allowed (default 4). Solved groups are shown in dark blue. If a guess is one off from a real group, you are told in orange. No repeat exact-set guesses; invalid formats do not consume attempts; standard wrong/completion/last-guess audio behavior applies.
 
+### 45) Move-Pool Sudoku
+Fill a **type grid** with row/column/diagonal uniqueness rules. Grid size is user-selected from **4x4 to 8x8** (default **4x4**). Some cells are fixed Pokémon clues; those slots are locked and consistent with a valid solved grid. You enter placements as `row col type`, can `clear row col`, and lose on too many wrong entries (configurable). Invalid input does not consume attempts; standard wrong/completion/last-guess audio behavior applies.
+
 ## Audio (optional)
 
 Sound uses **pygame** (`pip install pygame`). Place files under `pokequiz/assets/` (or point env vars at your own paths). In **settings**, you can mute background music, input blip, completion fanfare, and last-guess warning independently.

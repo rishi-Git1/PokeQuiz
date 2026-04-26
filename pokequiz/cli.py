@@ -100,6 +100,9 @@ from pokequiz.games.war_game import stat_value as war_stat_value
 from pokequiz.games.stamina_hangman import build_challenge as build_stamina_hangman_challenge
 from pokequiz.games.move_chain_connections import build_challenge as build_move_connections_challenge
 from pokequiz.games.move_chain_connections import display_move_name as display_connection_move_name
+from pokequiz.games.movepool_sudoku import build_challenge as build_movepool_sudoku_challenge
+from pokequiz.games.movepool_sudoku import display_type_name as display_sudoku_type_name
+from pokequiz.games.movepool_sudoku import parse_type_guess as parse_sudoku_type_guess
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
 from pokequiz.games.exp_yield import resolve_pick as exp_yield_resolve_pick
@@ -3602,6 +3605,138 @@ def run_move_chain_connections(_settings: GameSettings) -> bool | None:
         return False
 
 
+def run_movepool_sudoku(settings: GameSettings) -> bool | None:
+    dex = load_dex()
+    pool = dex.filtered(settings)
+    if not pool:
+        print("No Pokémon match your filter settings.")
+        return None
+
+    while True:
+        size_raw = input("Grid size for Move-Pool Sudoku? [4-8, default=4]: ").strip()
+        if not size_raw:
+            size = 4
+            break
+        if size_raw.isdigit() and int(size_raw) in {4, 5, 6, 7, 8}:
+            size = int(size_raw)
+            break
+        print("Choose a size from 4 to 8.")
+
+    ch = build_movepool_sudoku_challenge(pool, size=size)
+    if ch is None:
+        print("Could not build Move-Pool Sudoku for this filter set.")
+        return None
+
+    max_wrong = _input_guess_count("How many wrong entries allowed?", 6)
+    wrong = 0
+    fills: dict[tuple[int, int], str] = {}
+
+    def _is_complete() -> bool:
+        for r in range(ch.size):
+            for c in range(ch.size):
+                if (r, c) in ch.clues:
+                    continue
+                if (r, c) not in fills:
+                    return False
+        return True
+
+    def _print_board() -> None:
+        width = 16
+        border = "+" + "+".join(["-" * width for _ in range(ch.size)]) + "+"
+        print("\nMove-Pool Sudoku")
+        print("Allowed types:", ", ".join(display_sudoku_type_name(t) for t in ch.type_cycle))
+        print("Rows/Cols are 1-indexed. Commands: <row> <col> <type>, clear <row> <col>, quit")
+        print(border)
+        for r in range(ch.size):
+            cells: list[str] = []
+            for c in range(ch.size):
+                if (r, c) in ch.clues:
+                    label = f"[{ch.clues[(r, c)][:13]}]"
+                elif (r, c) in fills:
+                    label = display_sudoku_type_name(fills[(r, c)])
+                else:
+                    label = "."
+                txt = f"{r+1},{c+1} {label}"
+                txt = txt[:width]
+                txt += " " * max(0, width - len(txt))
+                cells.append(txt)
+            print("|" + "|".join(cells) + "|")
+            print(border)
+        print(f"Wrong entries: {wrong}/{max_wrong}")
+
+    print()
+    print("Move-Pool Sudoku: fill the grid so each row/column/diagonal has unique types.")
+    print("Clue cells show Pokémon names; those cells must match one of that Pokémon's types in the solved grid.")
+
+    while wrong < max_wrong:
+        _print_board()
+        if _is_complete():
+            print("Solved! Great logic.")
+            bgm.play_completion_sound()
+            return True
+
+        _last_guess_warning(wrong + 1, max_wrong)
+        raw = input("Sudoku> ").strip()
+        if not raw:
+            print("Input cannot be blank.")
+            continue
+        cmd = raw.casefold()
+        if cmd in {"quit", "q", "exit"}:
+            print("Leaving Move-Pool Sudoku.")
+            return False
+
+        parts = raw.split()
+        if len(parts) == 3 and parts[0].casefold() == "clear":
+            rr, cc = parts[1], parts[2]
+            if not rr.isdigit() or not cc.isdigit():
+                print("clear expects numeric row/col.")
+                continue
+            r = int(rr) - 1
+            c = int(cc) - 1
+            if r < 0 or c < 0 or r >= ch.size or c >= ch.size:
+                print("Row/col out of range.")
+                continue
+            if (r, c) in ch.clues:
+                print("Cannot clear a clue cell.")
+                continue
+            fills.pop((r, c), None)
+            continue
+
+        if len(parts) < 3:
+            print("Use: <row> <col> <type>  (example: 2 3 fire)")
+            continue
+        rr, cc = parts[0], parts[1]
+        type_raw = " ".join(parts[2:])
+        if not rr.isdigit() or not cc.isdigit():
+            print("Row/col must be numeric.")
+            continue
+        r = int(rr) - 1
+        c = int(cc) - 1
+        if r < 0 or c < 0 or r >= ch.size or c >= ch.size:
+            print("Row/col out of range.")
+            continue
+        if (r, c) in ch.clues:
+            print("That cell is a fixed Pokémon clue.")
+            continue
+        guessed_type = parse_sudoku_type_guess(type_raw, ch.type_cycle)
+        if guessed_type is None:
+            print(f'Unknown/invalid type for this puzzle: "{type_raw}".')
+            continue
+
+        # Strict correctness scoring: incorrect placement costs an attempt.
+        if guessed_type != ch.solution[r][c]:
+            wrong += 1
+            _wrong_guess_feedback()
+            continue
+        fills[(r, c)] = guessed_type
+
+    print("Out of wrong entries. Puzzle failed.")
+    print("One valid completed grid was:")
+    for r in range(ch.size):
+        print(" | ".join(display_sudoku_type_name(ch.solution[r][c]) for c in range(ch.size)))
+    return False
+
+
 def _route_bgm_after_game(result: bool | None) -> None:
     """Win restores menu BGM; loss or quitting a mode plays the loser theme (if configured)."""
     if result is True:
@@ -3677,6 +3812,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "42) War")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "44) Move-Chain Connections")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "45) Move-Pool Sudoku")
             choice = input("> ").strip()
             cmd = choice.casefold()
             if cmd in {"settings", "s"}:
@@ -3773,6 +3909,8 @@ def main() -> None:
                 _route_bgm_after_game(run_stamina_hangman(settings))
             elif choice == "44":
                 _route_bgm_after_game(run_move_chain_connections(settings))
+            elif choice == "45":
+                _route_bgm_after_game(run_movepool_sudoku(settings))
             else:
                 _main_menu_print(shiny_colored_menu, shiny_menu_fg, "Unknown choice.")
     finally:
