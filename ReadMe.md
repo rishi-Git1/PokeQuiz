@@ -187,7 +187,7 @@ A 4x4 grid of 16 move names is shown. Submit guesses as four numbers (for exampl
 ### 45) Move-Pool Sudoku
 Fill a **type grid** with row/column/diagonal uniqueness rules. Grid size is user-selected from **4x4 to 8x8** (default **4x4**). Some cells are fixed Pokémon clues; those slots are locked and consistent with a valid solved grid. You enter placements as `row col type` (or `row col type test` for a non-scoring pencil/test mark), can `clear row col`, and lose on too many wrong entries (configurable). Test entries do not count toward completion. Invalid input does not consume attempts; standard wrong/completion/last-guess audio behavior applies.
 
-### 46) Pokemon Tetris
+### 46) Typing Tetris
 Single-type blocks fall in a **12x20** board and are rendered as **4x4** visual tiles. You choose drop speed (`slow` default; `medium`/`fast`) and move active blocks with arrow keys (`Left/Right`, `Down` to force drop). When blocks contact, they interact by type effectiveness (including special-case overrides like Water on Fire and Dragon on Fairy). The game ends on top-out when a new block cannot spawn at the top. Standard wrong/completion/loser-music routing applies.
 
 ### 47) Legendary Yahtzee

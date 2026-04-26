@@ -3768,12 +3768,12 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
     try:
         import msvcrt  # type: ignore
     except Exception:
-        print("Pokemon Tetris is currently supported on Windows terminals only.")
+        print("Typing Tetris is currently supported on Windows terminals only.")
         return None
 
     speed_map = {"slow": 0.55, "medium": 0.35, "fast": 0.22}
     while True:
-        raw = input("Drop speed for Pokemon Tetris? [slow/medium/fast, default=slow]: ").strip().casefold()
+        raw = input("Drop speed for Typing Tetris? [slow/medium/fast, default=slow]: ").strip().casefold()
         if not raw:
             speed = "slow"
             break
@@ -3822,7 +3822,7 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
 
     def _render() -> None:
         os.system("cls")
-        print(f"Pokemon Tetris 12x20 | Speed: {speed.title()} | Arrows: move/drop | q to quit")
+        print(f"Typing Tetris 12x20 | Speed: {speed.title()} | Arrows: move/drop | q to quit")
         print("Game ends when a new block cannot spawn at the top.")
         if status:
             print(status)
@@ -3878,7 +3878,7 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
         while msvcrt.kbhit():
             ch = msvcrt.getch()
             if ch in {b"q", b"Q"}:
-                print("Leaving Pokemon Tetris.")
+                print("Leaving Typing Tetris.")
                 return False
             if ch in {b"\xe0", b"\x00"}:
                 code = msvcrt.getch()
@@ -3899,7 +3899,7 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
                 _lock_or_interact()
                 if not _spawn_new():
                     _render()
-                    print("Top-out! You lose Pokemon Tetris.")
+                    print("Top-out! You lose Typing Tetris.")
                     return False
         _render()
         time.sleep(0.02)
@@ -4116,7 +4116,7 @@ def main() -> None:
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "43) Stamina Hangman")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "44) Move-Chain Connections")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "45) Move-Pool Sudoku")
-            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "46) Pokemon Tetris")
+            _main_menu_print(shiny_colored_menu, shiny_menu_fg, "46) Typing Tetris")
             _main_menu_print(shiny_colored_menu, shiny_menu_fg, "47) Legendary Yahtzee")
             choice = input("> ").strip()
             cmd = choice.casefold()
