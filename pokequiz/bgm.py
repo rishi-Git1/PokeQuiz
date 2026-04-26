@@ -47,6 +47,15 @@ def _default_bgm_paths() -> list[Path]:
         base / "menu_theme_4.ogg",
         base / "menu_theme_4.mp3",
         base / "menu_theme_4.wav",
+        base / "menu_theme_5.ogg",
+        base / "menu_theme_5.mp3",
+        base / "menu_theme_5.wav",
+        base / "menu_theme_6.ogg",
+        base / "menu_theme_6.mp3",
+        base / "menu_theme_6.wav",
+        base / "menu_theme_7.ogg",
+        base / "menu_theme_7.mp3",
+        base / "menu_theme_7.wav",
     ]
 
 
@@ -309,7 +318,8 @@ def start_if_configured() -> None:
     except ImportError:
         print(
             "Tip: for background music, `pip install pygame` and place littleroot.ogg/mp3/wav "
-            "in pokequiz/assets/ (or set POKEQUIZ_BGM)."
+            "(plus optional menu_theme_2..menu_theme_7 in ogg/mp3/wav) in pokequiz/assets/ "
+            "(or set POKEQUIZ_BGM)."
         )
         return
     if not ensure_mixer():
@@ -591,7 +601,8 @@ def setup_terminal_audio() -> None:
         if want_bgm:
             print(
                 "Tip: for background music, `pip install pygame` and place littleroot.ogg/mp3/wav "
-                "in pokequiz/assets/ (or set POKEQUIZ_BGM)."
+                "(plus optional menu_theme_2..menu_theme_7 in ogg/mp3/wav) in pokequiz/assets/ "
+                "(or set POKEQUIZ_BGM)."
             )
         if want_sfx:
             print(
@@ -621,7 +632,8 @@ def setup_terminal_audio() -> None:
         if want_loser_bgm:
             print(
                 "Tip: for post-loss menu music, `pip install pygame` and place loser.ogg/mp3/wav "
-                "in pokequiz/assets/ (or set POKEQUIZ_LOSER_BGM)."
+                "(plus optional loser_theme_2/3 in ogg/mp3/wav) in pokequiz/assets/ "
+                "(or set POKEQUIZ_LOSER_BGM)."
             )
         return
     if not ensure_mixer():
