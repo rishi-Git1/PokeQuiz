@@ -29,11 +29,11 @@ CATEGORIES: tuple[str, ...] = (
 
 CATEGORY_LABELS: dict[str, str] = {
     "three_kind": "Three of a Kind (type)",
-    "full_house": "Full House (types 3+2)",
-    "small_straight": "Small Straight (4 consecutive power steps)",
-    "large_straight": "Large Straight (power +10 steps)",
+    "full_house": "Full House (types 3+2, BP sum)",
+    "small_straight": "Small Straight (3 consecutive power steps)",
+    "large_straight": "Large Straight (4 consecutive power steps)",
     "four_kind": "Four of a Kind (damage class)",
-    "legendary": "Legendary (all same type)",
+    "legendary": "Legendary (all same type, +100 bonus)",
     "chance": "Chance (sum of all powers)",
 }
 
@@ -43,6 +43,13 @@ def display_move_name(slug: str) -> str:
 
 
 def power_value(m: RollMove) -> int:
+    return int(m.power) if m.power is not None else 0
+
+
+def scored_bp_value(m: RollMove) -> int:
+    # Yahtzee scoring rule: status moves count as 75 BP.
+    if m.damage_class == "status":
+        return 75
     return int(m.power) if m.power is not None else 0
 
 
@@ -78,56 +85,55 @@ def random_roll_move() -> RollMove:
 
 def score_category(hand: list[RollMove], cat: str) -> int:
     if cat == "legendary":
-        return 50 if len({m.type_slug for m in hand}) == 1 else 0
+        if len({m.type_slug for m in hand}) == 1:
+            return 100 + sum(scored_bp_value(m) for m in hand)
+        return 0
     if cat == "chance":
         return sum(power_value(m) for m in hand)
     if cat == "four_kind":
-        counts: dict[str, int] = {}
+        by_class: dict[str, list[int]] = {}
         for m in hand:
-            counts[m.damage_class] = counts.get(m.damage_class, 0) + 1
-        if max(counts.values(), default=0) >= 4:
-            return sum(power_value(m) for m in hand)
-        return 0
+            by_class.setdefault(m.damage_class, []).append(scored_bp_value(m))
+        best = 0
+        for vals in by_class.values():
+            if len(vals) < 4:
+                continue
+            best = max(best, sum(sorted(vals, reverse=True)[:4]))
+        return best
     if cat == "three_kind":
-        counts: dict[str, int] = {}
+        by_type: dict[str, list[int]] = {}
         for m in hand:
-            counts[m.type_slug] = counts.get(m.type_slug, 0) + 1
-        if max(counts.values(), default=0) >= 3:
-            return sum(power_value(m) for m in hand)
-        return 0
+            by_type.setdefault(m.type_slug, []).append(scored_bp_value(m))
+        best = 0
+        for vals in by_type.values():
+            if len(vals) < 3:
+                continue
+            best = max(best, sum(sorted(vals, reverse=True)[:3]))
+        return best
     if cat == "full_house":
         counts: dict[str, int] = {}
         for m in hand:
             counts[m.type_slug] = counts.get(m.type_slug, 0) + 1
         vals = sorted(counts.values())
-        return 25 if vals == [2, 3] else 0
+        if vals == [2, 3]:
+            return sum(scored_bp_value(m) for m in hand)
+        return 0
     if cat == "small_straight":
-        powers = [m.power for m in hand]
-        if any(p is None for p in powers):
-            return 0
-        vals = sorted({int(p) for p in powers if p is not None})
-        run = 1
-        best = 1
-        for i in range(1, len(vals)):
-            if vals[i] - vals[i - 1] == 10:
-                run += 1
-                if run > best:
-                    best = run
-            else:
-                run = 1
-        return 30 if best >= 4 else 0
+        vals = sorted({scored_bp_value(m) for m in hand})
+        best_sum = 0
+        for i in range(len(vals) - 2):
+            a, b, c = vals[i], vals[i + 1], vals[i + 2]
+            if b - a == 10 and c - b == 10:
+                best_sum = max(best_sum, a + b + c)
+        return best_sum
     if cat == "large_straight":
-        powers = [m.power for m in hand]
-        if any(p is None for p in powers):
-            return 0
-        vals = sorted(int(p) for p in powers if p is not None)
-        if len(set(vals)) != 5:
-            return 0
-        # Consecutive in 10-point steps.
-        for i in range(4):
-            if vals[i + 1] - vals[i] != 10:
-                return 0
-        return 40
+        vals = sorted({scored_bp_value(m) for m in hand})
+        best_sum = 0
+        for i in range(len(vals) - 3):
+            a, b, c, d = vals[i], vals[i + 1], vals[i + 2], vals[i + 3]
+            if b - a == 10 and c - b == 10 and d - c == 10:
+                best_sum = max(best_sum, a + b + c + d)
+        return best_sum
     return 0
 
 

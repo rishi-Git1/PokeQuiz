@@ -191,18 +191,18 @@ Fill a **type grid** with row/column/diagonal uniqueness rules. Grid size is use
 Single-type blocks fall in a **12x20** board and are rendered as **4x4** visual tiles. You choose drop speed (`slow` default; `medium`/`fast`) and move active blocks with arrow keys (`Left/Right`, `Down` to force drop). When blocks contact, they interact by type effectiveness (including special-case overrides like Water on Fire and Dragon on Fairy). The game ends on top-out when a new block cannot spawn at the top. Standard wrong/completion/loser-music routing applies.
 
 ### 47) Legendary Yahtzee
-Head-to-head Yahtzee-style duel against the CPU using move metadata. Each side rolls 5 moves up to 3 times per round, with player hold commands (`keep <indices>` / `roll`) and visible CPU roll steps. The game uses **7 rounds** (one per category): `Three of a Kind`, `Four of a Kind`, `Full House`, `Small Straight`, `Large Straight`, `Legendary`, and `Chance`.
+Head-to-head Yahtzee-style duel using move metadata. Each side rolls 5 moves up to 3 times per round. On your turn, you can hold moves between rolls with `keep <indices>` or reroll with `roll`. The game uses **7 rounds** (one per category): `Three of a Kind`, `Four of a Kind`, `Full House`, `Small Straight`, `Large Straight`, `Legendary`, and `Chance`.
 
 Scoring:
-- **Three of a Kind**: 3 moves of the same **Type** -> sum of all move powers
-- **Four of a Kind**: 4 moves of the same **damage class** (`Physical`/`Special`/`Status`) -> sum of all move powers
-- **Full House**: 3 of one type + 2 of another type -> fixed 25
-- **Small Straight**: 4 consecutive powers in +10 steps -> fixed 30
-- **Large Straight**: 5 consecutive powers in +10 steps -> fixed 40
-- **Legendary**: 5 moves of the exact same type -> fixed 50
+- **Three of a Kind**: 3 moves of the same **Type** -> sum of those 3 BPs (`Status` counts as **75 BP**)
+- **Four of a Kind**: 4 moves of the same **damage class** (`Physical`/`Special`/`Status`) -> sum of those 4 BPs (`Status` counts as **75 BP**)
+- **Full House**: 3 moves of one type + 2 moves of another type -> sum of all 5 BPs (`Status` counts as **75 BP**)
+- **Small Straight**: 3 consecutive BPs in +10 steps -> sum of those 3 BPs (`Status` counts as **75 BP**)
+- **Large Straight**: 4 consecutive BPs in +10 steps -> sum of those 4 BPs (`Status` counts as **75 BP**)
+- **Legendary**: 5 moves of the exact same type -> **+100** bonus plus sum of all 5 BPs (`Status` counts as **75 BP**)
 - **Chance**: any hand -> sum of all move powers
 
-CPU behavior is intentionally fast and heuristic-based (no heavy simulation): it prioritizes building/locking `Four of a Kind` when possible, then other high-value patterns, and auto-scores `Four of a Kind` when present and still available. Category input is flexible and accepts spaced, underscored, or hyphen forms (for example: `full house`, `full_house`, `full-house`).
+Category input is flexible and accepts spaced, underscored, or hyphen forms (for example: `full house`, `full_house`, `full-house`).
 
 ## Audio (optional)
 
