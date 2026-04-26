@@ -112,9 +112,11 @@ from pokequiz.games.legendary_yahtzee import (
     CATEGORY_LABELS as YAHTZEE_LABELS,
     RollMove as YahtzeeMove,
     best_category_for_hand as yahtzee_best_category_for_hand,
+    cpu_best_keep_mask as yahtzee_cpu_best_keep_mask,
     display_move_name as display_yahtzee_move_name,
     power_value as yahtzee_power_value,
     random_roll_move as yahtzee_random_roll_move,
+    score_category as yahtzee_score_category,
 )
 from pokequiz.games.exp_yield import build_challenge as build_exp_yield_challenge
 from pokequiz.games.exp_yield import letter_labels, pick_help_line, prompt_line as exp_yield_prompt_line
@@ -3905,8 +3907,11 @@ def run_pokemon_tetris(_settings: GameSettings) -> bool | None:
 
 def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
     print()
-    print("Legendary Yahtzee: 4 rounds, each side rolls 5 moves up to 3 times.")
-    print("Categories: Full House, Large Straight, Four of a Kind, Legendary.")
+    print("Legendary Yahtzee: 7 rounds, each side rolls 5 moves up to 3 times.")
+    print(
+        "Categories: Three of a Kind, Four of a Kind, Full House, "
+        "Small Straight, Large Straight, Legendary, Chance."
+    )
     print("Computer rolls three times, then takes the highest-value available category.")
     print("Commands during hold phase: keep <indices>, roll, quit")
 
@@ -3931,8 +3936,9 @@ def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
             out[i] = yahtzee_random_roll_move()
         return out
 
-    for round_no in range(1, 5):
-        print(f"\n=== Legendary Yahtzee Round {round_no}/4 ===")
+    total_rounds = len(YAHTZEE_CATEGORIES)
+    for round_no in range(1, total_rounds + 1):
+        print(f"\n=== Legendary Yahtzee Round {round_no}/{total_rounds} ===")
         print(f"Score — You: {player_score} | CPU: {cpu_score}")
 
         # Player turn
@@ -3978,13 +3984,18 @@ def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
                 continue
             print(f"- {k}: {YAHTZEE_LABELS[k]}")
         while True:
-            cat_raw = input("Choose category key: ").strip().casefold().replace("-", "_")
+            cat_raw = (
+                input("Choose category key: ")
+                .strip()
+                .casefold()
+                .replace("-", "_")
+                .replace(" ", "_")
+            )
             if cat_raw not in player_available:
                 print("Pick an unused category key from the list.")
                 continue
             player_cat = cat_raw
             break
-        from pokequiz.games.legendary_yahtzee import score_category as yahtzee_score_category
         player_turn_score = yahtzee_score_category(hand, player_cat)
         player_available.remove(player_cat)
         player_score += player_turn_score
@@ -3996,13 +4007,23 @@ def run_legendary_yahtzee(_settings: GameSettings) -> bool | None:
         cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
         print("\nCPU roll 1/3:")
         _show_hand(cpu_hand)
-        cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
+        keep1 = yahtzee_cpu_best_keep_mask(cpu_hand, cpu_available)
+        keep1_list = [str(i + 1) for i in range(5) if (keep1 >> i) & 1]
+        print(f"CPU keeps: {', '.join(keep1_list) if keep1_list else '(none)'}")
+        cpu_hand = _reroll(cpu_hand, keep1)
         print("CPU roll 2/3:")
         _show_hand(cpu_hand)
-        cpu_hand = [yahtzee_random_roll_move() for _ in range(5)]
+        keep2 = yahtzee_cpu_best_keep_mask(cpu_hand, cpu_available)
+        keep2_list = [str(i + 1) for i in range(5) if (keep2 >> i) & 1]
+        print(f"CPU keeps: {', '.join(keep2_list) if keep2_list else '(none)'}")
+        cpu_hand = _reroll(cpu_hand, keep2)
         print("CPU roll 3/3:")
         _show_hand(cpu_hand)
-        cpu_cat, cpu_turn_score = yahtzee_best_category_for_hand(cpu_hand, cpu_available)
+        if "four_kind" in cpu_available and yahtzee_score_category(cpu_hand, "four_kind") > 0:
+            cpu_cat = "four_kind"
+            cpu_turn_score = yahtzee_score_category(cpu_hand, "four_kind")
+        else:
+            cpu_cat, cpu_turn_score = yahtzee_best_category_for_hand(cpu_hand, cpu_available)
         cpu_available.remove(cpu_cat)
         cpu_score += cpu_turn_score
         print(f"CPU scores {cpu_turn_score} in {YAHTZEE_LABELS[cpu_cat]}.")
